@@ -1,0 +1,224 @@
+# =============================================================================
+# AFitCenter Backend - configuração base do Docker Compose
+#
+# Não publica nenhuma porta no host: use sempre junto com um overlay.
+#   Local / homologação: -f compose.yml -f compose.homolog.yml
+#   Produção:            -f compose.yml -f compose.prod.yml
+#   Banco e RabbitMQ no host (rodar serviço pela IDE): acrescente -f compose.dev.yml
+#
+# Cada container recebe apenas as variáveis que consome. Não há env_file compartilhado:
+# um serviço comprometido não enxerga as senhas dos outros bancos nem a chave privada do JWT.
+# =============================================================================
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+x-java-service: &java-service
+  restart: unless-stopped
+  networks: [afitcenter]
+  logging: *logging
+  stop_grace_period: 30s
+  # O healthcheck vem do Dockerfile.service (GET /actuator/health).
+
+# Variáveis comuns a todos os serviços Spring. O Eureka exige basic auth: as credenciais vão
+# na URL (use valores seguros em URL, ex.: hexadecimal).
+x-spring-env: &spring-env
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+  SERVER_PORT: "8080"
+  SERVER_SHUTDOWN: graceful
+  EUREKA_URL: http://${EUREKA_USER:?defina EUREKA_USER}:${EUREKA_PASSWORD:?defina EUREKA_PASSWORD}@service-registry:8761/eureka/
+
+# Chave PÚBLICA do JWT (ES256): valida tokens, mas não emite. Gateway e microsserviços.
+x-jwt-verificacao: &jwt-verificacao
+  AFIT_JWT_PUBLIC_KEY: ${AFIT_JWT_PUBLIC_KEY:?defina AFIT_JWT_PUBLIC_KEY}
+  AFIT_JWT_ISSUER: ${AFIT_JWT_ISSUER:?defina AFIT_JWT_ISSUER}
+
+# Token das chamadas serviço-a-serviço (rotas /internal/**). O Gateway não o recebe.
+x-internal-token: &internal-token
+  AFIT_INTERNAL_TOKEN: ${AFIT_INTERNAL_TOKEN:?defina AFIT_INTERNAL_TOKEN}
+
+x-rabbit-env: &rabbit-env
+  SPRING_RABBITMQ_HOST: rabbitmq
+  SPRING_RABBITMQ_PORT: "5672"
+  SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:?defina RABBITMQ_USER}
+  SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?defina RABBITMQ_PASSWORD}
+
+x-depende-infra: &depende-infra
+  service-registry: { condition: service_healthy }
+  postgres: { condition: service_healthy }
+  rabbitmq: { condition: service_healthy }
+
+services:
+  # ---------------------------------------------------------------------------
+  # Infraestrutura
+  # ---------------------------------------------------------------------------
+  service-registry:
+    <<: *java-service
+    image: ${IMAGE_REGISTRY:-afitcenter}/service-registry:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: service-registry } }
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      SERVER_PORT: "8761"
+      EUREKA_USER: ${EUREKA_USER:?defina EUREKA_USER}
+      EUREKA_PASSWORD: ${EUREKA_PASSWORD:?defina EUREKA_PASSWORD}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "4", "-O", "/dev/null", "http://127.0.0.1:8761/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  gateway:
+    <<: *java-service
+    image: ${IMAGE_REGISTRY:-afitcenter}/gateway:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: gateway } }
+    environment:
+      # Sem segredos: só a chave pública. O Gateway não emite tokens nem fala com /internal.
+      <<: [*spring-env, *jwt-verificacao]
+      # Sem valor: só é repassada se estiver definida (mantém o padrão do perfil).
+      AFIT_CORS_ALLOWED_ORIGINS:
+    depends_on:
+      service-registry: { condition: service_healthy }
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    # Nome de host fixo: o RabbitMQ grava os dados por nome de nó (rabbit@<host>).
+    hostname: rabbitmq
+    restart: unless-stopped
+    networks: [afitcenter]
+    logging: *logging
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?defina RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?defina RABBITMQ_PASSWORD}
+    volumes: [rabbitmq_data:/var/lib/rabbitmq]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+  # Um PostgreSQL com um banco e um usuário por microsserviço (docker/postgres/01-criar-bancos.sh).
+  # Cada serviço só conhece o próprio usuário. Em produção, troque por um banco gerenciado se quiser.
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    networks: [afitcenter]
+    logging: *logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-afit_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?defina POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_DB: postgres
+      AUTH_DB_NAME: ${AUTH_DB_NAME:-afit_auth}
+      AUTH_DB_USER: ${AUTH_DB_USER:-afit_auth}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?defina AUTH_DB_PASSWORD}
+      NUTRICIONISTA_DB_NAME: ${NUTRICIONISTA_DB_NAME:-afit_nutricionista}
+      NUTRICIONISTA_DB_USER: ${NUTRICIONISTA_DB_USER:-afit_nutricionista}
+      NUTRICIONISTA_DB_PASSWORD: ${NUTRICIONISTA_DB_PASSWORD:?defina NUTRICIONISTA_DB_PASSWORD}
+      PACIENTE_DB_NAME: ${PACIENTE_DB_NAME:-afit_paciente}
+      PACIENTE_DB_USER: ${PACIENTE_DB_USER:-afit_paciente}
+      PACIENTE_DB_PASSWORD: ${PACIENTE_DB_PASSWORD:?defina PACIENTE_DB_PASSWORD}
+      CONSULTA_DB_NAME: ${CONSULTA_DB_NAME:-afit_consulta}
+      CONSULTA_DB_USER: ${CONSULTA_DB_USER:-afit_consulta}
+      CONSULTA_DB_PASSWORD: ${CONSULTA_DB_PASSWORD:?defina CONSULTA_DB_PASSWORD}
+      AVALIACAO_DB_NAME: ${AVALIACAO_DB_NAME:-afit_avaliacao}
+      AVALIACAO_DB_USER: ${AVALIACAO_DB_USER:-afit_avaliacao}
+      AVALIACAO_DB_PASSWORD: ${AVALIACAO_DB_PASSWORD:?defina AVALIACAO_DB_PASSWORD}
+      DIETA_DB_NAME: ${DIETA_DB_NAME:-afit_dieta}
+      DIETA_DB_USER: ${DIETA_DB_USER:-afit_dieta}
+      DIETA_DB_PASSWORD: ${DIETA_DB_PASSWORD:?defina DIETA_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # TCP em 127.0.0.1: durante a inicialização o servidor temporário só escuta no socket,
+      # então o container só fica saudável depois que os bancos foram criados.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Microsserviços
+  # ---------------------------------------------------------------------------
+  ms-autenticacao:
+    <<: *java-service
+    image: ${IMAGE_REGISTRY:-afitcenter}/ms-autenticacao:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-autenticacao } }
+    environment:
+      <<: [*spring-env, *jwt-verificacao, *internal-token]
+      # Único container com a chave PRIVADA: só o ms-autenticacao emite tokens.
+      AFIT_JWT_PRIVATE_KEY: ${AFIT_JWT_PRIVATE_KEY:?defina AFIT_JWT_PRIVATE_KEY}
+      AFIT_TOKEN_VALIDADE_MINUTOS: ${AFIT_TOKEN_VALIDADE_MINUTOS:-15}
+      AFIT_LOGIN_MAX_FALHAS: ${AFIT_LOGIN_MAX_FALHAS:-5}
+      AFIT_LOGIN_BLOQUEIO_MINUTOS: ${AFIT_LOGIN_BLOQUEIO_MINUTOS:-15}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${AUTH_DB_NAME:-afit_auth}
+      SPRING_DATASOURCE_USERNAME: ${AUTH_DB_USER:-afit_auth}
+      SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD}
+    depends_on:
+      service-registry: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+
+  ms-nutricionista:
+    <<: *java-service
+    image: ${IMAGE_REGISTRY:-afitcenter}/ms-nutricionista:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-nutricionista } }
+    environment:
+      <<: [*spring-env, *jwt-verificacao, *internal-token, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${NUTRICIONISTA_DB_NAME:-afit_nutricionista}
+      SPRING_DATASOURCE_USERNAME: ${NUTRICIONISTA_DB_USER:-afit_nutricionista}
+      SPRING_DATASOURCE_PASSWORD: ${NUTRICIONISTA_DB_PASSWORD}
+    depends_on: *depende-infra
+
+  ms-paciente:
+    <<: *java-service
+    image: ${IMAGE_REGISTRY:-afitcenter}/ms-paciente:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-paciente } }
+    environment:
+      <<: [*spring-env, *jwt-verificacao, *internal-token, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${PACIENTE_DB_NAME:-afit_paciente}
+      SPRING_DATASOURCE_USERNAME: ${PACIENTE_DB_USER:-afit_paciente}
+      SPRING_DATASOURCE_PASSWORD: ${PACIENTE_DB_PASSWORD}
+    depends_on: *depende-infra
+
+  ms-consulta:
+    <<: *java-service
+    image: ${IMAGE_REGISTRY:-afitcenter}/ms-consulta:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-consulta } }
+    environment:
+      <<: [*spring-env, *jwt-verificacao, *internal-token, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${CONSULTA_DB_NAME:-afit_consulta}
+      SPRING_DATASOURCE_USERNAME: ${CONSULTA_DB_USER:-afit_consulta}
+      SPRING_DATASOURCE_PASSWORD: ${CONSULTA_DB_PASSWORD}
+    depends_on: *depende-infra
+
+  ms-avaliacao:
+    <<: *java-service
+    image: ${IMAGE_REGISTRY:-afitcenter}/ms-avaliacao:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-avaliacao } }
+    environment:
+      <<: [*spring-env, *jwt-verificacao, *internal-token, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${AVALIACAO_DB_NAME:-afit_avaliacao}
+      SPRING_DATASOURCE_USERNAME: ${AVALIACAO_DB_USER:-afit_avaliacao}
+      SPRING_DATASOURCE_PASSWORD: ${AVALIACAO_DB_PASSWORD}
+    depends_on: *depende-infra
+
+  ms-dieta:
+    <<: *java-service
+    image: ${IMAGE_REGISTRY:-afitcenter}/ms-dieta:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-dieta } }
+    environment:
+      <<: [*spring-env, *jwt-verificacao, *internal-token, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DIETA_DB_NAME:-afit_dieta}
+      SPRING_DATASOURCE_USERNAME: ${DIETA_DB_USER:-afit_dieta}
+      SPRING_DATASOURCE_PASSWORD: ${DIETA_DB_PASSWORD}
+    depends_on: *depende-infra
+
+networks:
+  afitcenter: { driver: bridge }
+
+volumes:
+  rabbitmq_data:
+  postgres_data:

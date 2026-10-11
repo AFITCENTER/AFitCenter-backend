@@ -1,0 +1,51 @@
+# =============================================================================
+# Overlay de produção: endurece os containers e publica apenas o Gateway.
+#
+# O Gateway fica preso a 127.0.0.1 por padrão; exponha-o por um proxy reverso com TLS.
+# Ajuste os limites de recursos conforme o host.
+# =============================================================================
+
+# Serviços Java: filesystem somente leitura, sem capabilities do kernel.
+x-java-prod: &java-prod
+  read_only: true
+  tmpfs: ["/tmp:size=128m"]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  deploy:
+    resources:
+      limits: { memory: 768M, cpus: "1.0" }
+      reservations: { memory: 256M }
+
+# Infraestrutura: as imagens oficiais precisam de algumas capabilities no entrypoint.
+x-infra-prod: &infra-prod
+  security_opt: ["no-new-privileges:true"]
+  deploy:
+    resources:
+      limits: { memory: 1G, cpus: "1.0" }
+
+services:
+  gateway:
+    <<: *java-prod
+    ports:
+      - "${GATEWAY_BIND_ADDRESS:-127.0.0.1}:${GATEWAY_PORT:-8080}:8080"
+
+  service-registry:
+    <<: *java-prod
+    deploy:
+      resources:
+        limits: { memory: 512M, cpus: "0.5" }
+        reservations: { memory: 192M }
+
+  ms-autenticacao: *java-prod
+  ms-nutricionista: *java-prod
+  ms-paciente: *java-prod
+  ms-consulta: *java-prod
+  ms-avaliacao: *java-prod
+  ms-dieta: *java-prod
+
+  rabbitmq: *infra-prod
+  postgres:
+    <<: *infra-prod
+    deploy:
+      resources:
+        limits: { memory: 2G, cpus: "2.0" }

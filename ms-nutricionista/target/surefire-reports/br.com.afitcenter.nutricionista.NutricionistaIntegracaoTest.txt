@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: br.com.afitcenter.nutricionista.NutricionistaIntegracaoTest
+-------------------------------------------------------------------------------
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 19.29 s -- in br.com.afitcenter.nutricionista.NutricionistaIntegracaoTest

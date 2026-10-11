@@ -1,0 +1,8 @@
+D:\AFitCenter\backend\afitcenter-core\core-mensageria\src\main\java\br\com\afitcenter\core\mensageria\autoconfigure\MensageriaAutoConfiguration.java
+D:\AFitCenter\backend\afitcenter-core\core-mensageria\src\main\java\br\com\afitcenter\core\mensageria\evento\ConsultorioEvento.java
+D:\AFitCenter\backend\afitcenter-core\core-mensageria\src\main\java\br\com\afitcenter\core\mensageria\evento\PacienteEvento.java
+D:\AFitCenter\backend\afitcenter-core\core-mensageria\src\main\java\br\com\afitcenter\core\mensageria\evento\TipoAlteracao.java
+D:\AFitCenter\backend\afitcenter-core\core-mensageria\src\main\java\br\com\afitcenter\core\mensageria\Eventos.java
+D:\AFitCenter\backend\afitcenter-core\core-mensageria\src\main\java\br\com\afitcenter\core\mensageria\fila\Filas.java
+D:\AFitCenter\backend\afitcenter-core\core-mensageria\src\main\java\br\com\afitcenter\core\mensageria\outbox\Outbox.java
+D:\AFitCenter\backend\afitcenter-core\core-mensageria\src\main\java\br\com\afitcenter\core\mensageria\outbox\OutboxPublicador.java

@@ -1,0 +1,7 @@
+D:\AFitCenter\backend\gateway\src\main\java\br\com\afitcenter\gateway\config\CorsConfig.java
+D:\AFitCenter\backend\gateway\src\main\java\br\com\afitcenter\gateway\config\GatewayConfig.java
+D:\AFitCenter\backend\gateway\src\main\java\br\com\afitcenter\gateway\erro\RespostaErro.java
+D:\AFitCenter\backend\gateway\src\main\java\br\com\afitcenter\gateway\filter\HeadersInternosSanitizerFilter.java
+D:\AFitCenter\backend\gateway\src\main\java\br\com\afitcenter\gateway\filter\JwtAuthFilter.java
+D:\AFitCenter\backend\gateway\src\main\java\br\com\afitcenter\gateway\filter\RotasInternasBloqueioFilter.java
+D:\AFitCenter\backend\gateway\src\main\java\br\com\afitcenter\gateway\GatewayApplication.java

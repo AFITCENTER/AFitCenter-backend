@@ -1,0 +1,27 @@
+# Contexto do Dockerfile.service: apenas POMs e código de produção do reactor.
+
+# Controle de versão e IDEs
+.git
+.github
+.idea
+.vscode
+**/*.iml
+
+# Artefatos de build
+**/target
+**/*.log
+
+# Testes não rodam no build da imagem (-Dmaven.test.skip=true)
+**/src/test
+
+# Documentação, Docker e utilitários
+**/*.md
+**/Dockerfile*
+**/.dockerignore
+**/compose*.yml
+docker
+scripts
+
+# Arquivos de ambiente: segredos nunca entram no contexto de build
+**/.env
+**/.env.*

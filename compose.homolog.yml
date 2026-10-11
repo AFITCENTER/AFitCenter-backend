@@ -1,0 +1,18 @@
+# =============================================================================
+# Overlay de desenvolvimento local e homologação.
+#
+# Publica no host o Gateway, o painel do Eureka e o painel do RabbitMQ. Por padrão as portas
+# ficam presas a 127.0.0.1; use PUBLISH_ADDRESS=0.0.0.0 só com firewall/proxy reverso.
+# =============================================================================
+services:
+  gateway:
+    ports:
+      - "${PUBLISH_ADDRESS:-127.0.0.1}:${GATEWAY_PORT:-8080}:8080"
+
+  service-registry:
+    ports:
+      - "${PUBLISH_ADDRESS:-127.0.0.1}:${EUREKA_PORT:-8761}:8761"
+
+  rabbitmq:
+    ports:
+      - "${PUBLISH_ADDRESS:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"

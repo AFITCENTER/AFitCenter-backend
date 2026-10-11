@@ -1,0 +1,14 @@
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\autoconfigure\AfitcenterProperties.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\autoconfigure\CoreWebAutoConfiguration.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\erro\ConflitoException.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\erro\Problemas.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\erro\RecursoNaoEncontradoException.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\erro\RegraNegocioException.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\erro\TratadorExcecoes.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\erro\TratadorExcecoesFeign.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\feign\TokenInternoFeignInterceptor.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\paginacao\PaginaResponse.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\seguranca\AutenticacaoRequisicaoFilter.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\seguranca\RespostaProblema.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\seguranca\SegurancaPadrao.java
+D:\AFitCenter\backend\afitcenter-core\core-web\src\main\java\br\com\afitcenter\core\web\seguranca\UsuarioAutenticado.java

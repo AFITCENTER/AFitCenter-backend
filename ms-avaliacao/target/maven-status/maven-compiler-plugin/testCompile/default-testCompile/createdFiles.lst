@@ -1,0 +1,5 @@
+br\com\afitcenter\avaliacao\IntegracaoBase.class
+br\com\afitcenter\avaliacao\AvaliacaoIntegracaoTest.class
+br\com\afitcenter\avaliacao\CadastrosApiTest.class
+br\com\afitcenter\avaliacao\EvolucaoApiTest.class
+br\com\afitcenter\avaliacao\AvaliacaoApiTest.class

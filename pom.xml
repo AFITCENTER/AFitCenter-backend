@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>br.com.afitcenter</groupId>
+    <artifactId>afitcenter-backend</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>AFitCenter Backend</name>
+    <description>Agregador (reactor) dos módulos do backend. Versões e configuração de build ficam em afitcenter-parent.</description>
+
+    <modules>
+        <module>afitcenter-parent</module>
+        <module>afitcenter-core</module>
+
+        <module>service-registry</module>
+        <module>gateway</module>
+
+        <module>ms-autenticacao</module>
+        <module>ms-nutricionista</module>
+        <module>ms-paciente</module>
+        <module>ms-consulta</module>
+        <module>ms-avaliacao</module>
+        <module>ms-dieta</module>
+    </modules>
+</project>

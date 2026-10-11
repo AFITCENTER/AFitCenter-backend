@@ -1,0 +1,65 @@
+# syntax=docker/dockerfile:1.7
+#
+# Imagem única para todos os módulos executáveis do backend.
+#
+#   docker build -f Dockerfile.service --build-arg SERVICE_NAME=ms-paciente -t afitcenter/ms-paciente:local .
+#
+# O contexto precisa ser a raiz do backend: o módulo é compilado junto com as dependências
+# internas (afitcenter-core) pelo reactor Maven (-pl <módulo> -am).
+
+ARG MAVEN_IMAGE=maven:3.9-eclipse-temurin-21
+ARG RUNTIME_IMAGE=eclipse-temurin:21-jre-alpine
+
+# =============================================================================
+# Build
+# =============================================================================
+FROM ${MAVEN_IMAGE} AS build
+ARG SERVICE_NAME
+WORKDIR /workspace
+
+COPY . .
+
+# O cache do ~/.m2 é compartilhado entre builds: as dependências só são baixadas uma vez.
+# Os testes rodam no CI (mvn verify), não no build da imagem.
+RUN --mount=type=cache,target=/root/.m2 \
+    test -n "${SERVICE_NAME}" || { echo "Informe --build-arg SERVICE_NAME=<modulo>" >&2; exit 1; }; \
+    mvn -B -ntp -pl "${SERVICE_NAME}" -am -Dmaven.test.skip=true package && \
+    JAR="$(find "${SERVICE_NAME}/target" -maxdepth 1 -type f -name '*.jar' \
+           ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name '*.original' | head -n 1)" && \
+    test -s "${JAR}" && \
+    java -Djarmode=tools -jar "${JAR}" extract --layers --launcher --destination /workspace/extracted
+
+# =============================================================================
+# Runtime
+# =============================================================================
+FROM ${RUNTIME_IMAGE}
+ARG SERVICE_NAME
+
+LABEL org.opencontainers.image.title="afitcenter-${SERVICE_NAME}" \
+      org.opencontainers.image.vendor="AFitCenter"
+
+# Usuário sem privilégios com UID/GID fixos (compatível com runAsNonRoot).
+RUN addgroup -S -g 10001 spring && \
+    adduser -S -D -H -u 10001 -G spring -s /sbin/nologin spring
+
+WORKDIR /app
+
+# Camadas da mais estável para a mais volátil: mudar código só invalida "application".
+COPY --from=build /workspace/extracted/dependencies/ ./
+COPY --from=build /workspace/extracted/spring-boot-loader/ ./
+COPY --from=build /workspace/extracted/snapshot-dependencies/ ./
+COPY --from=build /workspace/extracted/application/ ./
+
+USER 10001:10001
+
+# Porta fixa dentro do container (fora do Docker os serviços sobem em porta aleatória).
+ENV SERVER_PORT=8080 \
+    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError -Duser.timezone=UTC -Dfile.encoding=UTF-8"
+
+EXPOSE 8080
+
+# wget vem do BusyBox da imagem Alpine.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
+    CMD wget -q -T 4 -O /dev/null "http://127.0.0.1:${SERVER_PORT}/actuator/health" || exit 1
+
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

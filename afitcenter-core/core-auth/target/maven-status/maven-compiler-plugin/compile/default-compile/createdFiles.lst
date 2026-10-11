@@ -1,0 +1,5 @@
+br\com\afitcenter\core\auth\jwt\TokenAcesso.class
+br\com\afitcenter\core\auth\jwt\ChavesJwt.class
+br\com\afitcenter\core\auth\jwt\JwtVerificador.class
+br\com\afitcenter\core\auth\jwt\JwtEmissor.class
+br\com\afitcenter\core\auth\jwt\TokenInvalidoException.class

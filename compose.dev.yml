@@ -1,0 +1,15 @@
+# =============================================================================
+# Overlay opcional de desenvolvimento: publica PostgreSQL e RabbitMQ em 127.0.0.1 para
+# inspeção (DBeaver) ou para rodar um microsserviço pela IDE usando a infraestrutura do Docker.
+# Nunca use em homologação ou produção.
+#
+#   docker compose --env-file .env.local -f compose.yml -f compose.homolog.yml -f compose.dev.yml up -d
+#
+# Ao rodar um serviço fora do Docker: <SERVICO>_DB_HOST=localhost, <SERVICO>_DB_PORT=${POSTGRES_HOST_PORT},
+# RABBITMQ_HOST=localhost e EUREKA_URL=http://<usuario>:<senha>@localhost:8761/eureka/
+# =============================================================================
+services:
+  postgres:
+    ports: ["127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"]
+  rabbitmq:
+    ports: ["127.0.0.1:${RABBITMQ_PORT:-5672}:5672"]

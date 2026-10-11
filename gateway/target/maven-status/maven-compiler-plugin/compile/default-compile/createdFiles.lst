@@ -1,0 +1,7 @@
+br\com\afitcenter\gateway\erro\RespostaErro.class
+br\com\afitcenter\gateway\filter\HeadersInternosSanitizerFilter.class
+br\com\afitcenter\gateway\filter\JwtAuthFilter.class
+br\com\afitcenter\gateway\GatewayApplication.class
+br\com\afitcenter\gateway\config\GatewayConfig.class
+br\com\afitcenter\gateway\filter\RotasInternasBloqueioFilter.class
+br\com\afitcenter\gateway\config\CorsConfig.class

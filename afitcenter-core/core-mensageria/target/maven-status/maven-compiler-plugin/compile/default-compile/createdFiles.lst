@@ -1,0 +1,11 @@
+br\com\afitcenter\core\mensageria\evento\ConsultorioEvento.class
+br\com\afitcenter\core\mensageria\Eventos.class
+br\com\afitcenter\core\mensageria\evento\PacienteEvento.class
+br\com\afitcenter\core\mensageria\evento\TipoAlteracao.class
+br\com\afitcenter\core\mensageria\outbox\Outbox.class
+br\com\afitcenter\core\mensageria\outbox\OutboxPublicador.class
+br\com\afitcenter\core\mensageria\autoconfigure\MensageriaAutoConfiguration$OutboxConfiguration$PublicadorConfiguration.class
+br\com\afitcenter\core\mensageria\autoconfigure\MensageriaAutoConfiguration$OutboxConfiguration.class
+br\com\afitcenter\core\mensageria\fila\Filas.class
+br\com\afitcenter\core\mensageria\outbox\OutboxPublicador$Pendente.class
+br\com\afitcenter\core\mensageria\autoconfigure\MensageriaAutoConfiguration.class

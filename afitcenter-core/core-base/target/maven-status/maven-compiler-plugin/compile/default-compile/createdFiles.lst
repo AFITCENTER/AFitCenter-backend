@@ -1,0 +1,7 @@
+br\com\afitcenter\core\base\http\InternalHeaders.class
+br\com\afitcenter\core\base\validacao\Cpf.class
+br\com\afitcenter\core\base\model\EntidadeAuditavel.class
+br\com\afitcenter\core\base\error\ProblemaJson.class
+br\com\afitcenter\core\base\validacao\CpfValido$Validador.class
+br\com\afitcenter\core\base\validacao\CpfValido.class
+br\com\afitcenter\core\base\security\Papel.class
