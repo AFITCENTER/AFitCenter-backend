@@ -25,5 +25,8 @@
         <module>ms-consulta</module>
         <module>ms-avaliacao</module>
         <module>ms-dieta</module>
+        <module>ms-planos</module>
+        <module>ms-pagamentos</module>
+        <module>ms-auditoria</module>
     </modules>
 </project>

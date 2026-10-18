@@ -13,4 +13,7 @@ public interface ConsultorioRepository extends JpaRepository<Consultorio, UUID> 
     List<Consultorio> findAllByNutricionistaIdAndAtivoTrueOrderByNome(UUID nutricionistaId);
 
     Optional<Consultorio> findByIdAndNutricionistaIdAndAtivoTrue(UUID id, UUID nutricionistaId);
+
+    /** Consultórios que contam no limite do plano (os desativados não contam). */
+    long countByNutricionistaIdAndAtivoTrue(UUID nutricionistaId);
 }

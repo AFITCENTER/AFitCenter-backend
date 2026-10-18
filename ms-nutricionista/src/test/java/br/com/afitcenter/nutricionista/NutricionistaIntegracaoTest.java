@@ -1,5 +1,9 @@
 package br.com.afitcenter.nutricionista;
 
+import br.com.afitcenter.core.assinatura.AssinaturaEventosListener;
+import br.com.afitcenter.core.assinatura.AssinaturaInternoClient;
+import br.com.afitcenter.core.mensageria.evento.AssinaturaEvento;
+import br.com.afitcenter.core.mensageria.evento.TipoAlteracao;
 import br.com.afitcenter.core.teste.DadosTeste;
 import br.com.afitcenter.core.teste.TesteIntegracao;
 import br.com.afitcenter.core.teste.TokensTeste;
@@ -20,6 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
@@ -45,8 +50,13 @@ class NutricionistaIntegracaoTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    AssinaturaEventosListener assinaturaListener;
+
     @MockitoBean
     AutenticacaoClient autenticacaoClient;
+    @MockitoBean
+    AssinaturaInternoClient assinaturaClient;
 
     @Test
     void cadastroCriaCredencialEPerfilComOMesmoId() throws Exception {
@@ -157,6 +167,41 @@ class NutricionistaIntegracaoTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ativo").value(false))
                 .andExpect(jsonPath("$.nutricionistaId").value(ana.toString()));
+    }
+
+    @Test
+    void limiteDeConsultoriosDoPlano() throws Exception {
+        UUID ana = criarNutricionista();
+        String token = TokensTeste.nutricionista(ana);
+        assinaturaListener.receber(new AssinaturaEvento(UUID.randomUUID(), TipoAlteracao.CRIADO, Instant.now(),
+                UUID.randomUUID(), ana, "GRATUITO", "ATIVA", 10, 1, 0));
+
+        String primeiro = mvc.perform(post("/v1/consultorios").header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nome\":\"Sala 1\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        mvc.perform(post("/v1/consultorios").header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nome\":\"Sala 2\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail").value("Seu plano permite até 1 consultórios. Mude de plano para cadastrar mais."));
+
+        mvc.perform(delete("/v1/consultorios/" + json.readTree(primeiro).get("id").asText()).header("Authorization", token))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/v1/consultorios").header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"nome\":\"Sala 2\"}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void cadastroPublicoEntraNaTrilhaComONovoUsuario() throws Exception {
+        UUID id = criarNutricionista();
+
+        var registro = json.readTree(jdbc.queryForObject("""
+                SELECT payload::text FROM outbox_evento
+                WHERE routing_key = 'auditoria.registro' AND payload->>'rota' = '/v1/cadastros'
+                  AND payload->>'usuarioId' = ?""", String.class, id.toString()));
+        assertThat(registro.get("papel").asText()).isEqualTo("ANONIMO");
+        assertThat(registro.get("nutricionistaId").asText()).isEqualTo(id.toString());
+        assertThat(registro.toString()).doesNotContain("senha-forte-1").doesNotContain("@teste.local");
     }
 
     @Test

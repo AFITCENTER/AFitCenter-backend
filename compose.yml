@@ -128,6 +128,15 @@ services:
       DIETA_DB_NAME: ${DIETA_DB_NAME:-afit_dieta}
       DIETA_DB_USER: ${DIETA_DB_USER:-afit_dieta}
       DIETA_DB_PASSWORD: ${DIETA_DB_PASSWORD:?defina DIETA_DB_PASSWORD}
+      PLANOS_DB_NAME: ${PLANOS_DB_NAME:-afit_planos}
+      PLANOS_DB_USER: ${PLANOS_DB_USER:-afit_planos}
+      PLANOS_DB_PASSWORD: ${PLANOS_DB_PASSWORD:?defina PLANOS_DB_PASSWORD}
+      PAGAMENTOS_DB_NAME: ${PAGAMENTOS_DB_NAME:-afit_pagamentos}
+      PAGAMENTOS_DB_USER: ${PAGAMENTOS_DB_USER:-afit_pagamentos}
+      PAGAMENTOS_DB_PASSWORD: ${PAGAMENTOS_DB_PASSWORD:?defina PAGAMENTOS_DB_PASSWORD}
+      AUDITORIA_DB_NAME: ${AUDITORIA_DB_NAME:-afit_auditoria}
+      AUDITORIA_DB_USER: ${AUDITORIA_DB_USER:-afit_auditoria}
+      AUDITORIA_DB_PASSWORD: ${AUDITORIA_DB_PASSWORD:?defina AUDITORIA_DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres:/docker-entrypoint-initdb.d:ro
@@ -148,7 +157,8 @@ services:
     image: ${IMAGE_REGISTRY:-afitcenter}/ms-autenticacao:${IMAGE_TAG:-local}
     build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-autenticacao } }
     environment:
-      <<: [*spring-env, *jwt-verificacao, *internal-token]
+      # RabbitMQ só para a trilha de auditoria (logins).
+      <<: [*spring-env, *jwt-verificacao, *internal-token, *rabbit-env]
       # Único container com a chave PRIVADA: só o ms-autenticacao emite tokens.
       AFIT_JWT_PRIVATE_KEY: ${AFIT_JWT_PRIVATE_KEY:?defina AFIT_JWT_PRIVATE_KEY}
       AFIT_TOKEN_VALIDADE_MINUTOS: ${AFIT_TOKEN_VALIDADE_MINUTOS:-15}
@@ -157,9 +167,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${AUTH_DB_NAME:-afit_auth}
       SPRING_DATASOURCE_USERNAME: ${AUTH_DB_USER:-afit_auth}
       SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD}
-    depends_on:
-      service-registry: { condition: service_healthy }
-      postgres: { condition: service_healthy }
+    depends_on: *depende-infra
 
   ms-nutricionista:
     <<: *java-service
@@ -214,6 +222,46 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DIETA_DB_NAME:-afit_dieta}
       SPRING_DATASOURCE_USERNAME: ${DIETA_DB_USER:-afit_dieta}
       SPRING_DATASOURCE_PASSWORD: ${DIETA_DB_PASSWORD}
+    depends_on: *depende-infra
+
+  ms-planos:
+    <<: *java-service
+    image: ${IMAGE_REGISTRY:-afitcenter}/ms-planos:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-planos } }
+    environment:
+      <<: [*spring-env, *jwt-verificacao, *internal-token, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${PLANOS_DB_NAME:-afit_planos}
+      SPRING_DATASOURCE_USERNAME: ${PLANOS_DB_USER:-afit_planos}
+      SPRING_DATASOURCE_PASSWORD: ${PLANOS_DB_PASSWORD}
+      PLANOS_DIAS_VENCIMENTO: ${PLANOS_DIAS_VENCIMENTO:-3}
+      PLANOS_DIAS_ANTECEDENCIA_RENOVACAO: ${PLANOS_DIAS_ANTECEDENCIA_RENOVACAO:-7}
+      PLANOS_DIAS_CARENCIA: ${PLANOS_DIAS_CARENCIA:-7}
+    depends_on: *depende-infra
+
+  ms-pagamentos:
+    <<: *java-service
+    image: ${IMAGE_REGISTRY:-afitcenter}/ms-pagamentos:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-pagamentos } }
+    environment:
+      <<: [*spring-env, *jwt-verificacao, *internal-token, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${PAGAMENTOS_DB_NAME:-afit_pagamentos}
+      SPRING_DATASOURCE_USERNAME: ${PAGAMENTOS_DB_USER:-afit_pagamentos}
+      SPRING_DATASOURCE_PASSWORD: ${PAGAMENTOS_DB_PASSWORD}
+      # Só o ms-pagamentos conhece o provedor e o segredo dos webhooks.
+      AFIT_PAGAMENTOS_PROVEDOR: ${AFIT_PAGAMENTOS_PROVEDOR:-SIMULADO}
+      AFIT_PAGAMENTOS_WEBHOOK_SEGREDO: ${AFIT_PAGAMENTOS_WEBHOOK_SEGREDO:?defina AFIT_PAGAMENTOS_WEBHOOK_SEGREDO}
+    depends_on: *depende-infra
+
+  ms-auditoria:
+    <<: *java-service
+    image: ${IMAGE_REGISTRY:-afitcenter}/ms-auditoria:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-auditoria } }
+    environment:
+      <<: [*spring-env, *jwt-verificacao, *internal-token, *rabbit-env]
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${AUDITORIA_DB_NAME:-afit_auditoria}
+      SPRING_DATASOURCE_USERNAME: ${AUDITORIA_DB_USER:-afit_auditoria}
+      SPRING_DATASOURCE_PASSWORD: ${AUDITORIA_DB_PASSWORD}
+      AUDITORIA_RETENCAO_DIAS: ${AUDITORIA_RETENCAO_DIAS:-1825}
     depends_on: *depende-infra
 
 networks:

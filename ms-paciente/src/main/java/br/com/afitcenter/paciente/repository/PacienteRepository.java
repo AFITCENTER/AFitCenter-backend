@@ -17,6 +17,9 @@ public interface PacienteRepository extends JpaRepository<Paciente, UUID>, JpaSp
 
     boolean existsByNutricionistaIdAndCpfAndDeletadoEmIsNull(UUID nutricionistaId, String cpf);
 
+    /** Fichas que contam no limite do plano (as excluídas não contam). */
+    long countByNutricionistaIdAndDeletadoEmIsNull(UUID nutricionistaId);
+
     boolean existsByNutricionistaIdAndCpfAndDeletadoEmIsNullAndIdNot(UUID nutricionistaId, String cpf, UUID id);
 
     /** Filtros da listagem. Critérios nulos são ignorados pelo Spring Data. */

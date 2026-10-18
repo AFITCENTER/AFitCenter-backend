@@ -22,6 +22,21 @@ public final class Eventos {
     public static final String CONSULTORIO_DESATIVADO = "consultorio.desativado";
     public static final String PADRAO_CONSULTORIO = "consultorio.*";
 
+    public static final String ASSINATURA_CRIADA = "assinatura.criada";
+    public static final String ASSINATURA_ATUALIZADA = "assinatura.atualizada";
+    public static final String PADRAO_ASSINATURA = "assinatura.*";
+
+    public static final String COBRANCA_PAGA = "cobranca.paga";
+    public static final String COBRANCA_RECUSADA = "cobranca.recusada";
+    public static final String COBRANCA_VENCIDA = "cobranca.vencida";
+    public static final String COBRANCA_CANCELADA = "cobranca.cancelada";
+    public static final String COBRANCA_ESTORNADA = "cobranca.estornada";
+    public static final String PADRAO_COBRANCA = "cobranca.*";
+
+    /** Trilha de auditoria: todos os serviços publicam, só o ms-auditoria consome. */
+    public static final String AUDITORIA_REGISTRO = "auditoria.registro";
+    public static final String PADRAO_AUDITORIA = "auditoria.*";
+
     private Eventos() {
     }
 }

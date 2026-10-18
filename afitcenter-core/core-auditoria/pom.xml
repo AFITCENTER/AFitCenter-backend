@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>br.com.afitcenter</groupId>
+        <artifactId>afitcenter-core</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>core-auditoria</artifactId>
+    <name>AFitCenter :: Core Auditoria</name>
+    <description>
+        Trilha de auditoria: registra cada requisição /v1/** (quem, o quê, em qual recurso, resultado) e as
+        ações do sistema na outbox, de onde seguem para o ms-auditoria pelo RabbitMQ.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>br.com.afitcenter</groupId>
+            <artifactId>core-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>br.com.afitcenter</groupId>
+            <artifactId>core-mensageria</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

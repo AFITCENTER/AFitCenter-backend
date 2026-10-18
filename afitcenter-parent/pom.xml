@@ -107,6 +107,16 @@
             </dependency>
             <dependency>
                 <groupId>br.com.afitcenter</groupId>
+                <artifactId>core-assinatura</artifactId>
+                <version>${afitcenter-core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>br.com.afitcenter</groupId>
+                <artifactId>core-auditoria</artifactId>
+                <version>${afitcenter-core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>br.com.afitcenter</groupId>
                 <artifactId>core-teste</artifactId>
                 <version>${afitcenter-core.version}</version>
             </dependency>

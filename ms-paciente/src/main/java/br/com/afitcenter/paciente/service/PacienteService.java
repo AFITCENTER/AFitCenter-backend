@@ -1,5 +1,7 @@
 package br.com.afitcenter.paciente.service;
 
+import br.com.afitcenter.core.assinatura.AssinaturaRefService;
+import br.com.afitcenter.core.assinatura.Limite;
 import br.com.afitcenter.core.base.validacao.Cpf;
 import br.com.afitcenter.core.mensageria.Eventos;
 import br.com.afitcenter.core.mensageria.evento.PacienteEvento;
@@ -31,6 +33,8 @@ import java.util.UUID;
 /**
  * Fichas de paciente do nutricionista logado. Toda alteração publica um {@link PacienteEvento}
  * (via outbox, na mesma transação) para as réplicas do ms-consulta, ms-avaliacao e ms-dieta.
+ *
+ * <p>O número de fichas é limitado pelo plano da assinatura (ms-planos, via core-assinatura).</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -40,6 +44,7 @@ public class PacienteService {
 
     private final PacienteRepository repository;
     private final Outbox outbox;
+    private final AssinaturaRefService assinaturas;
 
     @Transactional(readOnly = true)
     public PaginaResponse<PacienteResumoResponse> listar(UUID nutricionistaId, String busca, StatusPaciente status,
@@ -62,6 +67,8 @@ public class PacienteService {
         String cpf = Cpf.normalizar(dados.cpf());
         if (cpf != null && repository.existsByNutricionistaIdAndCpfAndDeletadoEmIsNull(nutricionistaId, cpf))
             throw new ConflitoException("Você já tem um paciente cadastrado com este CPF.");
+        assinaturas.exigirDisponivel(nutricionistaId, Limite.PACIENTES,
+                () -> repository.countByNutricionistaIdAndDeletadoEmIsNull(nutricionistaId));
 
         Paciente paciente = new Paciente(nutricionistaId);
         preencher(paciente, dados, cpf);

@@ -1,5 +1,10 @@
 package br.com.afitcenter.paciente;
 
+import br.com.afitcenter.core.assinatura.AssinaturaEventosListener;
+import br.com.afitcenter.core.assinatura.AssinaturaInternoClient;
+import br.com.afitcenter.core.assinatura.AssinaturaRef;
+import br.com.afitcenter.core.mensageria.evento.AssinaturaEvento;
+import br.com.afitcenter.core.mensageria.evento.TipoAlteracao;
 import br.com.afitcenter.core.teste.ChavesTeste;
 import br.com.afitcenter.core.teste.DadosTeste;
 import br.com.afitcenter.core.teste.TesteIntegracao;
@@ -11,13 +16,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -34,6 +43,12 @@ class PacienteIntegracaoTest {
     ObjectMapper json;
     @Autowired
     JdbcTemplate jdbc;
+    @Autowired
+    AssinaturaEventosListener assinaturaListener;
+
+    /** Sem resposta (null): sem réplica, a criação segue sem limite, como com o ms-planos fora do ar. */
+    @MockitoBean
+    AssinaturaInternoClient assinaturaClient;
 
     private final UUID ana = UUID.randomUUID();
     private final UUID bruno = UUID.randomUUID();
@@ -195,6 +210,76 @@ class PacienteIntegracaoTest {
                         br.com.afitcenter.core.base.security.Papel.PACIENTE)))
                 .andExpect(status().isForbidden());
         mvc.perform(get("/internal/pacientes/" + UUID.randomUUID())).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void limiteDePacientesDoPlano() throws Exception {
+        assinaturaListener.receber(new AssinaturaEvento(UUID.randomUUID(), TipoAlteracao.CRIADO, Instant.now(),
+                UUID.randomUUID(), ana, "GRATUITO", "ATIVA", 2, 1, 0));
+        UUID primeiro = criar(ana, paciente("Primeiro", null));
+        criar(ana, paciente("Segundo", null));
+
+        cadastrar(ana, paciente("Terceiro", null))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail").value("Seu plano permite até 2 pacientes. Mude de plano para cadastrar mais."));
+
+        // Excluir libera a vaga; um plano maior (evento mais novo) também.
+        mvc.perform(delete("/v1/pacientes/" + primeiro).header("Authorization", TokensTeste.nutricionista(ana)))
+                .andExpect(status().isNoContent());
+        criar(ana, paciente("Terceiro", null));
+        assinaturaListener.receber(new AssinaturaEvento(UUID.randomUUID(), TipoAlteracao.ATUALIZADO, Instant.now(),
+                UUID.randomUUID(), ana, "PROFISSIONAL", "ATIVA", 300, 3, 1));
+        criar(ana, paciente("Quarto", null));
+        // Evento antigo (versão menor) não volta o limite.
+        assinaturaListener.receber(new AssinaturaEvento(UUID.randomUUID(), TipoAlteracao.ATUALIZADO, Instant.now(),
+                UUID.randomUUID(), ana, "GRATUITO", "ATIVA", 2, 1, 0));
+        criar(ana, paciente("Quinto", null));
+    }
+
+    @Test
+    void semReplicaConsultaOMsPlanos() throws Exception {
+        when(assinaturaClient.buscar(bruno))
+                .thenReturn(new AssinaturaRef(bruno, UUID.randomUUID(), "GRATUITO", "SUSPENSA", 0, 0, 4));
+
+        cadastrar(bruno, paciente("Bloqueado", null))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("suspensa")));
+        verify(assinaturaClient).buscar(bruno);
+        assertThat(jdbc.queryForObject("SELECT versao FROM assinatura_ref WHERE nutricionista_id = ?", Long.class, bruno))
+                .isEqualTo(4);
+    }
+
+    @Test
+    void trilhaDeAuditoriaSemDadosPessoais() throws Exception {
+        String cpf = DadosTeste.cpf();
+        UUID id = criar(ana, paciente("Maria Sigilosa", cpf));
+        mvc.perform(get("/v1/pacientes/" + id).header("Authorization", TokensTeste.nutricionista(ana)))
+                .andExpect(status().isOk());
+        mvc.perform(get("/v1/pacientes").param("busca", "Sigilosa")
+                .header("Authorization", TokensTeste.nutricionista(ana))).andExpect(status().isOk());
+
+        var registros = jdbc.queryForList("""
+                SELECT payload::text AS payload FROM outbox_evento
+                WHERE routing_key = 'auditoria.registro' AND payload->>'nutricionistaId' = ?
+                ORDER BY criado_em""", ana.toString());
+        assertThat(registros).hasSize(3);
+        JsonNode criacao = json.readTree(registros.get(0).get("payload").toString());
+        assertThat(criacao.get("acao").asText()).isEqualTo("CRIACAO");
+        assertThat(criacao.get("recurso").asText()).isEqualTo("pacientes");
+        assertThat(criacao.get("recursoId").asText()).isEqualTo(id.toString());
+        assertThat(criacao.get("pacienteId").asText()).isEqualTo(id.toString());
+        assertThat(criacao.get("status").asInt()).isEqualTo(201);
+        JsonNode leitura = json.readTree(registros.get(1).get("payload").toString());
+        assertThat(leitura.get("acao").asText()).isEqualTo("LEITURA");
+        assertThat(leitura.get("rota").asText()).isEqualTo("/v1/pacientes/{id}");
+        assertThat(registros).allSatisfy(r -> assertThat(r.get("payload").toString())
+                .doesNotContain("Sigilosa").doesNotContain(cpf));
+
+        // Catálogo de condições não entra na trilha.
+        mvc.perform(get("/v1/condicoes").header("Authorization", TokensTeste.nutricionista(bruno))).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM outbox_evento WHERE routing_key = 'auditoria.registro'
+                AND payload->>'nutricionistaId' = ?""", Long.class, bruno.toString())).isZero();
     }
 
     private ObjectNode paciente(String nome, String cpf) {

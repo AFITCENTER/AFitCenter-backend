@@ -24,6 +24,8 @@ import java.util.UUID;
  *     marcado como publicado depois do ack do broker.</li>
  *     <li>Depois de {@code max-tentativas} falhas o evento para de ser reenviado e fica na tabela
  *     para análise ({@code ultimo_erro}).</li>
+ *     <li>Eventos já publicados são apagados depois de {@code retencao-horas} (a trilha de auditoria
+ *     passa pela outbox, então a tabela cresceria sem limite).</li>
  * </ul>
  *
  * <p>A entrega é "pelo menos uma vez": consumidores precisam ser idempotentes.</p>
@@ -38,14 +40,16 @@ public class OutboxPublicador {
     private final TransactionTemplate transacao;
     private final int maxTentativas;
     private final long timeoutConfirmacaoMs;
+    private final long retencaoHoras;
 
     public OutboxPublicador(JdbcTemplate jdbc, RabbitTemplate rabbitTemplate, TransactionTemplate transacao,
-                            int maxTentativas, long timeoutConfirmacaoMs) {
+                            int maxTentativas, long timeoutConfirmacaoMs, long retencaoHoras) {
         this.jdbc = jdbc;
         this.rabbitTemplate = rabbitTemplate;
         this.transacao = transacao;
         this.maxTentativas = maxTentativas;
         this.timeoutConfirmacaoMs = timeoutConfirmacaoMs;
+        this.retencaoHoras = retencaoHoras;
     }
 
     private record Pendente(UUID id, String routingKey, String payload, int tentativas) {
@@ -82,6 +86,16 @@ public class OutboxPublicador {
                 }
             }
         });
+    }
+
+    /** Remove os eventos publicados há mais de {@code retencao-horas}. Os não publicados nunca são apagados. */
+    @Scheduled(fixedDelayString = "${afitcenter.outbox.limpeza-intervalo-ms:3600000}",
+            initialDelayString = "${afitcenter.outbox.limpeza-intervalo-ms:3600000}")
+    public void limparPublicados() {
+        int removidos = jdbc.update("DELETE FROM outbox_evento WHERE publicado_em < now() - make_interval(hours => ?)",
+                (int) retencaoHoras);
+        if (removidos > 0)
+            log.debug("{} eventos publicados removidos da outbox.", removidos);
     }
 
     private void publicar(Pendente pendente) {
