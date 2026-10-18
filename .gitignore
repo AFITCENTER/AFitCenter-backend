@@ -1,0 +1,12 @@
+# Build do Maven
+target/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+
+# Ambientes com segredos (modelo em .env.example)
+.env
+.env.*
+!.env.example

@@ -1,5 +1,0 @@
-D:\AFitCenter\backend\afitcenter-core\core-auth\src\main\java\br\com\afitcenter\core\auth\jwt\ChavesJwt.java
-D:\AFitCenter\backend\afitcenter-core\core-auth\src\main\java\br\com\afitcenter\core\auth\jwt\JwtEmissor.java
-D:\AFitCenter\backend\afitcenter-core\core-auth\src\main\java\br\com\afitcenter\core\auth\jwt\JwtVerificador.java
-D:\AFitCenter\backend\afitcenter-core\core-auth\src\main\java\br\com\afitcenter\core\auth\jwt\TokenAcesso.java
-D:\AFitCenter\backend\afitcenter-core\core-auth\src\main\java\br\com\afitcenter\core\auth\jwt\TokenInvalidoException.java
