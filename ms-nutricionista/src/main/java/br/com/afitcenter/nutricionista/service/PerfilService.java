@@ -2,6 +2,7 @@ package br.com.afitcenter.nutricionista.service;
 
 import br.com.afitcenter.core.web.erro.RecursoNaoEncontradoException;
 import br.com.afitcenter.nutricionista.model.dto.Dtos.AtualizarPerfilRequest;
+import br.com.afitcenter.nutricionista.model.dto.Dtos.NutricionistaInternoResponse;
 import br.com.afitcenter.nutricionista.model.dto.Dtos.NutricionistaResponse;
 import br.com.afitcenter.nutricionista.model.entity.Nutricionista;
 import br.com.afitcenter.nutricionista.repository.NutricionistaRepository;
@@ -20,6 +21,11 @@ public class PerfilService {
     @Transactional(readOnly = true)
     public NutricionistaResponse buscar(UUID nutricionistaId) {
         return NutricionistaResponse.de(entidade(nutricionistaId));
+    }
+
+    @Transactional(readOnly = true)
+    public NutricionistaInternoResponse buscarInterno(UUID nutricionistaId) {
+        return NutricionistaInternoResponse.de(entidade(nutricionistaId));
     }
 
     /** CPF, CRN e e-mail não mudam por aqui (o e-mail é o login, gerido pelo ms-autenticacao). */

@@ -26,6 +26,8 @@
         <module>core-web</module>
         <module>core-mensageria</module>
         <module>core-paciente</module>
+        <module>core-assinatura</module>
+        <module>core-auditoria</module>
         <module>core-teste</module>
     </modules>
 </project>

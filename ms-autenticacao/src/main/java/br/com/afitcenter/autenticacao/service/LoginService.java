@@ -4,7 +4,10 @@ import br.com.afitcenter.autenticacao.model.dto.Dtos.LoginRequest;
 import br.com.afitcenter.autenticacao.model.dto.Dtos.TokenResponse;
 import br.com.afitcenter.autenticacao.model.entity.Usuario;
 import br.com.afitcenter.autenticacao.repository.UsuarioRepository;
+import br.com.afitcenter.core.auditoria.Acoes;
+import br.com.afitcenter.core.auditoria.AuditoriaRequisicao;
 import br.com.afitcenter.core.auth.jwt.JwtEmissor;
+import br.com.afitcenter.core.base.security.Papel;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -36,8 +39,10 @@ public class LoginService {
         this.hashFicticio = passwordEncoder.encode("senha-ficticia-para-tempo-constante");
     }
 
+    /** Sucesso e falha vão para a trilha de auditoria (ação LOGIN); o e-mail nunca é registrado. */
     @Transactional
     public TokenResponse autenticar(LoginRequest dados) {
+        AuditoriaRequisicao.acao(Acoes.LOGIN);
         String email = UsuarioService.normalizarEmail(dados.email());
         tentativas.verificarBloqueio(email);
 
@@ -49,6 +54,9 @@ public class LoginService {
         }
 
         Usuario usuario = encontrado.get();
+        AuditoriaRequisicao.usuario(usuario.getId());
+        AuditoriaRequisicao.recursoId(usuario.getId());
+        if (usuario.getPerfil() == Papel.NUTRICIONISTA) AuditoriaRequisicao.nutricionista(usuario.getId());
         if (!usuario.isAtivo())
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Usuário inativo ou bloqueado.");
 

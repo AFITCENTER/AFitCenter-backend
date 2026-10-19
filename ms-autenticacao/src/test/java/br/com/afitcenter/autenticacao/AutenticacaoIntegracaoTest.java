@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -38,6 +39,8 @@ class AutenticacaoIntegracaoTest {
     ObjectMapper json;
     @Autowired
     JwtVerificador verificador;
+    @Autowired
+    JdbcTemplate jdbc;
 
     @Test
     void cadastroLoginContaETrocaDeSenha() throws Exception {
@@ -116,6 +119,27 @@ class AutenticacaoIntegracaoTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(result -> assertThat(result.getResponse().getContentType())
                         .startsWith("application/problem+json"));
+    }
+
+    @Test
+    void loginsComSucessoEFalhaEntramNaTrilhaSemOEmail() throws Exception {
+        String email = emailUnico();
+        UUID id = UUID.fromString(json.readTree(criarUsuario(email, "senha-forte-1", "NUTRICIONISTA")
+                .andReturn().getResponse().getContentAsString()).get("id").asText());
+
+        login(email, "senha-errada").andExpect(status().isUnauthorized());
+        login(email, "senha-forte-1").andExpect(status().isOk());
+
+        var logins = jdbc.queryForList("""
+                SELECT payload->>'status' AS status, payload->>'usuarioId' AS usuario, payload::text AS payload
+                FROM outbox_evento
+                WHERE routing_key = 'auditoria.registro' AND payload->>'acao' = 'LOGIN'
+                  AND (payload->>'usuarioId' = ? OR payload->>'usuarioId' IS NULL)
+                ORDER BY criado_em DESC LIMIT 2""", id.toString());
+        assertThat(logins).extracting(l -> l.get("status")).containsExactly("200", "401");
+        assertThat(logins.get(0).get("usuario")).isEqualTo(id.toString());
+        assertThat(logins.get(1).get("usuario")).as("falha não identifica a conta").isNull();
+        assertThat(logins).allSatisfy(l -> assertThat(l.get("payload").toString()).doesNotContain(email));
     }
 
     private ResultActions criarUsuario(String email, String senha, String perfil) throws Exception {

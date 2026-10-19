@@ -1,5 +1,6 @@
 package br.com.afitcenter.nutricionista.service;
 
+import br.com.afitcenter.core.auditoria.AuditoriaRequisicao;
 import br.com.afitcenter.core.base.validacao.Cpf;
 import br.com.afitcenter.core.web.erro.ConflitoException;
 import br.com.afitcenter.nutricionista.client.AutenticacaoClient;
@@ -66,6 +67,10 @@ public class CadastroService {
                 throw new ConflitoException("Já existe um nutricionista cadastrado com este CPF ou CRN.");
             throw e;
         }
+        // A requisição é anônima: a trilha registra quem acabou de ser cadastrado.
+        AuditoriaRequisicao.usuario(usuarioId);
+        AuditoriaRequisicao.nutricionista(usuarioId);
+        AuditoriaRequisicao.recursoId(usuarioId);
         return new CadastroResponse(usuarioId);
     }
 

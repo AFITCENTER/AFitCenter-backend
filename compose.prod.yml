@@ -42,6 +42,9 @@ services:
   ms-consulta: *java-prod
   ms-avaliacao: *java-prod
   ms-dieta: *java-prod
+  ms-planos: *java-prod
+  ms-pagamentos: *java-prod
+  ms-auditoria: *java-prod
 
   rabbitmq: *infra-prod
   postgres:

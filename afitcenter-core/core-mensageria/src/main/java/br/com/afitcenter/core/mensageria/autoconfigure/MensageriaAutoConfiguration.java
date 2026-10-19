@@ -32,7 +32,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *     pelo {@code RabbitTemplate} quanto pelos {@code @RabbitListener}.</li>
  *     <li>{@code afitcenter.outbox.habilitado=true}: bean {@link Outbox} (serviços produtores).</li>
  *     <li>{@code afitcenter.outbox.publicador-habilitado} (padrão {@code true}): agenda o
- *     {@link OutboxPublicador}. Os testes desligam para conferir os eventos na tabela.</li>
+ *     {@link OutboxPublicador} e a limpeza dos eventos já publicados ({@code afitcenter.outbox.retencao-horas},
+ *     padrão 168). Os testes desligam para conferir os eventos na tabela.</li>
  * </ul>
  */
 @AutoConfiguration(after = {JacksonAutoConfiguration.class, JdbcTemplateAutoConfiguration.class},
@@ -77,10 +78,11 @@ public class MensageriaAutoConfiguration {
                     RabbitTemplate rabbitTemplate,
                     PlatformTransactionManager transactionManager,
                     @Value("${afitcenter.outbox.max-tentativas:10}") int maxTentativas,
-                    @Value("${afitcenter.outbox.timeout-confirmacao-ms:5000}") long timeoutConfirmacaoMs
+                    @Value("${afitcenter.outbox.timeout-confirmacao-ms:5000}") long timeoutConfirmacaoMs,
+                    @Value("${afitcenter.outbox.retencao-horas:168}") long retencaoHoras
             ) {
                 return new OutboxPublicador(jdbcTemplate, rabbitTemplate, new TransactionTemplate(transactionManager),
-                        maxTentativas, timeoutConfirmacaoMs);
+                        maxTentativas, timeoutConfirmacaoMs, retencaoHoras);
             }
         }
     }

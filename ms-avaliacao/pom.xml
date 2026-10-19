@@ -25,6 +25,10 @@
         </dependency>
         <dependency>
             <groupId>br.com.afitcenter</groupId>
+            <artifactId>core-auditoria</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>br.com.afitcenter</groupId>
             <artifactId>core-paciente</artifactId>
         </dependency>
 

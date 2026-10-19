@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: br.com.afitcenter.avaliacao.AvaliacaoApiTest
--------------------------------------------------------------------------------
-Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 25.78 s -- in br.com.afitcenter.avaliacao.AvaliacaoApiTest

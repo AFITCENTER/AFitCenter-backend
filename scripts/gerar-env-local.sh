@@ -67,6 +67,15 @@ AVALIACAO_DB_PASSWORD=$(hex 16)
 DIETA_DB_NAME=afit_dieta
 DIETA_DB_USER=afit_dieta
 DIETA_DB_PASSWORD=$(hex 16)
+PLANOS_DB_NAME=afit_planos
+PLANOS_DB_USER=afit_planos
+PLANOS_DB_PASSWORD=$(hex 16)
+PAGAMENTOS_DB_NAME=afit_pagamentos
+PAGAMENTOS_DB_USER=afit_pagamentos
+PAGAMENTOS_DB_PASSWORD=$(hex 16)
+AUDITORIA_DB_NAME=afit_auditoria
+AUDITORIA_DB_USER=afit_auditoria
+AUDITORIA_DB_PASSWORD=$(hex 16)
 
 AFIT_JWT_ISSUER=afitcenter-local
 AFIT_JWT_PRIVATE_KEY=$privada
@@ -75,6 +84,16 @@ AFIT_TOKEN_VALIDADE_MINUTOS=60
 AFIT_INTERNAL_TOKEN=$(hex 32)
 AFIT_LOGIN_MAX_FALHAS=5
 AFIT_LOGIN_BLOQUEIO_MINUTOS=15
+
+AFIT_PAGAMENTOS_PROVEDOR=SIMULADO
+AFIT_PAGAMENTOS_WEBHOOK_SEGREDO=$(hex 32)
+# Asaas sandbox: preencha a chave (entre aspas simples, ela começa com \$), habilite e cadastre o token
+# abaixo no webhook do Asaas. Para cobrar por ele, AFIT_PAGAMENTOS_PROVEDOR=ASAAS.
+AFIT_PAGAMENTOS_ASAAS_HABILITADO=false
+AFIT_PAGAMENTOS_ASAAS_URL=https://api-sandbox.asaas.com/v3
+AFIT_PAGAMENTOS_ASAAS_CHAVE_API=
+AFIT_PAGAMENTOS_ASAAS_TOKEN_WEBHOOK=$(hex 32)
+AUDITORIA_RETENCAO_DIAS=1825
 EOF
 
 echo "Arquivo $destino criado."

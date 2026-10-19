@@ -1,5 +1,7 @@
 package br.com.afitcenter.nutricionista.service;
 
+import br.com.afitcenter.core.assinatura.AssinaturaRefService;
+import br.com.afitcenter.core.assinatura.Limite;
 import br.com.afitcenter.core.mensageria.Eventos;
 import br.com.afitcenter.core.mensageria.evento.ConsultorioEvento;
 import br.com.afitcenter.core.mensageria.evento.TipoAlteracao;
@@ -18,7 +20,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** Consultórios do nutricionista. Cada alteração publica um evento (via outbox) para o ms-consulta. */
+/**
+ * Consultórios do nutricionista. Cada alteração publica um evento (via outbox) para o ms-consulta. O número de
+ * consultórios ativos é limitado pelo plano da assinatura.
+ */
 @Service
 @RequiredArgsConstructor
 public class ConsultorioService {
@@ -26,6 +31,7 @@ public class ConsultorioService {
     private final ConsultorioRepository repository;
     private final PerfilService perfilService;
     private final Outbox outbox;
+    private final AssinaturaRefService assinaturas;
 
     @Transactional(readOnly = true)
     public List<ConsultorioResponse> listar(UUID nutricionistaId) {
@@ -41,6 +47,8 @@ public class ConsultorioService {
     @Transactional
     public ConsultorioResponse criar(UUID nutricionistaId, ConsultorioRequest dados) {
         perfilService.entidade(nutricionistaId);
+        assinaturas.exigirDisponivel(nutricionistaId, Limite.CONSULTORIOS,
+                () -> repository.countByNutricionistaIdAndAtivoTrue(nutricionistaId));
         Consultorio consultorio = repository.saveAndFlush(new Consultorio(nutricionistaId, dados.nome().trim(),
                 dados.telefone(), dados.endereco() == null ? null : dados.endereco().paraEntidade()));
         publicar(consultorio, TipoAlteracao.CRIADO, Eventos.CONSULTORIO_CRIADO);

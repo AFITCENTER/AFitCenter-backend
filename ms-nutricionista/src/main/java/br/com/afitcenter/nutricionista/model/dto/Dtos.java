@@ -97,6 +97,17 @@ public final class Dtos {
         }
     }
 
+    /**
+     * Formato de {@code GET /internal/nutricionistas/{id}}: só o que o ms-planos precisa para cobrar a assinatura
+     * (o provedor de pagamento exige nome e CPF do pagador).
+     */
+    public record NutricionistaInternoResponse(UUID id, String nome, String cpf, String email) {
+
+        public static NutricionistaInternoResponse de(Nutricionista n) {
+            return new NutricionistaInternoResponse(n.getId(), n.getNome(), n.getCpf(), n.getEmail());
+        }
+    }
+
     // ---------------------------------------------------------------- consultórios
 
     public record ConsultorioRequest(

@@ -13,6 +13,8 @@ backend/
 │   ├── core-web          #   auto-config: filtro de autenticação, tenant, segurança, erros, Feign
 │   ├── core-mensageria   #   contratos dos eventos, filas com DLQ, outbox transacional
 │   ├── core-paciente     #   réplica local do paciente para os serviços consumidores
+│   ├── core-assinatura   #   réplica da assinatura e aplicação dos limites do plano
+│   ├── core-auditoria    #   trilha de auditoria: registra cada requisição /v1/** na outbox
 │   └── core-teste        #   chaves/tokens de teste e @TesteIntegracao (PostgreSQL embutido)
 ├── service-registry/     # Eureka Server (basic auth)
 ├── gateway/              # API Gateway
@@ -22,6 +24,9 @@ backend/
 ├── ms-consulta/
 ├── ms-avaliacao/
 ├── ms-dieta/
+├── ms-planos/
+├── ms-pagamentos/
+├── ms-auditoria/
 ├── docker/postgres/      # Criação de um banco e um usuário por serviço
 ├── scripts/              # gerar-env-local.sh
 ├── compose.yml           # Base (não publica portas)
@@ -44,6 +49,9 @@ backend/
 | `ms-consulta` | `/ms-consulta` | Agenda e consultas (req. 4), análises (req. 2) | pronto |
 | `ms-avaliacao` | `/ms-avaliacao` | Avaliação corporal, metas, exames, evolução (req. 3 e 6) | esquema, catálogos e réplica; CRUD a implementar |
 | `ms-dieta` | `/ms-dieta` | Alimentos e dietas (req. 5) | esquema, catálogos, réplica e busca de alimentos; CRUD a implementar |
+| `ms-planos` | `/ms-planos` | Planos da plataforma, assinatura do nutricionista, faturas, renovação e inadimplência | pronto |
+| `ms-pagamentos` | `/ms-pagamentos` | Cobranças (Pix, boleto, cartão) num provedor plugável, webhooks, vencimento e estorno | pronto: simulador (padrão) e Asaas, este ainda não validado no sandbox |
+| `ms-auditoria` | `/ms-auditoria` | Trilha de auditoria de todos os serviços (LGPD) | pronto |
 
 ## Stack
 
@@ -68,7 +76,7 @@ O script cria um `.env.local` com segredos aleatórios e um par de chaves ES256 
 | http://localhost:15672 | Painel do RabbitMQ (`RABBITMQ_USER`/`RABBITMQ_PASSWORD`) |
 | http://localhost:8080/ms-paciente/swagger-ui.html | Swagger de cada serviço (só no perfil `local`) |
 
-No perfil `local` existem dois nutricionistas fictícios (tenants diferentes, para testar o isolamento) com pacientes, consultório e consultas de exemplo. As credenciais estão no comentário de `ms-autenticacao/src/main/resources/db/migration/local/R__dados_ficticios.sql`.
+No perfil `local` existem dois nutricionistas fictícios (tenants diferentes, para testar o isolamento) com pacientes, consultório e consultas de exemplo, e um administrador (papel `ADMIN`: planos, cobranças e auditoria de todos). A primeira nutricionista assina o plano Profissional; o segundo está no Gratuito. As credenciais estão no comentário de `ms-autenticacao/src/main/resources/db/migration/local/R__dados_ficticios.sql`.
 
 ```bash
 # login → token
@@ -77,7 +85,21 @@ curl -s -X POST http://localhost:8080/ms-auth/v1/auth/login -H "Content-Type: ap
 
 # pacientes do nutricionista logado
 curl -s http://localhost:8080/ms-paciente/v1/pacientes -H "Authorization: Bearer <accessToken>"
+
+# planos à venda (público) e mudança para o Clínica (id 3): devolve a fatura e o Pix fictício
+curl -s http://localhost:8080/ms-planos/v1/planos
+curl -s -X POST http://localhost:8080/ms-planos/v1/assinatura/mudanca-plano -H "Authorization: Bearer <accessToken>" \
+     -H "Content-Type: application/json" -d '{"planoId":3,"ciclo":"MENSAL","formaPagamento":"PIX"}'
+
+# "pagar" a cobrança no simulador (perfis local e homolog): o plano muda em instantes
+curl -s -X POST http://localhost:8080/ms-pagamentos/v1/simulador/cobrancas/<cobranca.id>/pagamento \
+     -H "Authorization: Bearer <accessToken>"
+
+# quem acessou os dados de um paciente
+curl -s "http://localhost:8080/ms-auditoria/v1/auditoria/registros?pacienteId=<id>" -H "Authorization: Bearer <accessToken>"
 ```
+
+> O provedor de pagamento padrão é o **simulador**: nenhuma cobrança é real. O ms-pagamentos também fala com o **Asaas** (Pix, boleto e cartão pela fatura hospedada). Para usá-lo, preencha `AFIT_PAGAMENTOS_ASAAS_*` no `.env` (a chave entre aspas simples, porque começa com `$`), cadastre no painel do Asaas o webhook `<gateway>/ms-pagamentos/v1/webhooks/asaas` com o mesmo token e troque `AFIT_PAGAMENTOS_PROVEDOR=ASAAS`. A URL padrão é a do sandbox. Detalhes em [docs/ARQUITETURA.md](../docs/ARQUITETURA.md#assinatura-da-plataforma).
 
 Para rodar um serviço pela IDE usando a infraestrutura do Docker, acrescente `-f compose.dev.yml` (publica PostgreSQL e RabbitMQ em `127.0.0.1`) e exporte as variáveis do `.env.local` com `<SERVICO>_DB_HOST=localhost`, `RABBITMQ_HOST=localhost` e o `EUREKA_URL` apontando para `localhost:8761`.
 
@@ -97,22 +119,22 @@ cd backend
 mvn verify
 ```
 
-Compila todos os módulos e roda os testes. Os testes de integração (`@TesteIntegracao`) sobem cada serviço com PostgreSQL 17 embutido, aplicam as migrações Flyway e validam o mapeamento JPA (`ddl-auto=validate`). Eureka e RabbitMQ ficam desligados nos testes; os eventos são conferidos na tabela `outbox_evento`.
+Compila todos os módulos e roda os testes. Os testes de integração (`@TesteIntegracao`) sobem cada serviço com PostgreSQL 17 embutido, aplicam as migrações Flyway e validam o mapeamento JPA (`ddl-auto=validate`). Eureka e RabbitMQ ficam desligados nos testes; os eventos (inclusive a trilha de auditoria) são conferidos na tabela `outbox_evento`. Os agendadores do ms-planos, ms-pagamentos e ms-auditoria também ficam desligados: os testes chamam os serviços com o instante que quiserem. Nenhum teste chama a internet: o Asaas é testado contra o `MockRestServiceServer` e contra um servidor HTTP local que imita a API dele (`AsaasFalso`).
 
 Para compilar só um serviço (com o core): `mvn -pl ms-paciente -am verify`.
 
 ## Variáveis de ambiente
 
-Modelo comentado: [.env.example](.env.example). O arquivo passado em `--env-file` serve só para a interpolação do Compose: cada container recebe apenas as variáveis que usa. Só o `ms-autenticacao` recebe a chave privada do JWT, o Gateway não recebe nenhum segredo e cada serviço só conhece a senha do próprio banco.
+Modelo comentado: [.env.example](.env.example). O arquivo passado em `--env-file` serve só para a interpolação do Compose: cada container recebe apenas as variáveis que usa. Só o `ms-autenticacao` recebe a chave privada do JWT, só o `ms-pagamentos` recebe a chave de API do provedor de pagamento e os segredos dos webhooks, o Gateway não recebe nenhum segredo e cada serviço só conhece a senha do próprio banco.
 
 > Nunca versione `.env.local`, `.env.homolog`, `.env.prod` ou qualquer arquivo com segredos.
 
-O script `docker/postgres/01-criar-bancos.sh` cria os bancos só na **primeira** inicialização do volume. Ao adicionar um serviço num ambiente que já existe, crie o banco dele manualmente.
+O script `docker/postgres/01-criar-bancos.sh` cria os bancos só na **primeira** inicialização do volume. Ao adicionar um serviço num ambiente que já existe, crie o banco dele manualmente (é o caso de `afit_planos`, `afit_pagamentos` e `afit_auditoria` num volume criado antes deles), ou recrie o volume num ambiente local.
 
 ## Adicionando um microsserviço
 
 1. Crie o módulo com `afitcenter-parent` como pai e adicione-o ao `pom.xml` da raiz.
-2. Dependa de `core-web` (e de `core-paciente` se referenciar pacientes; de `core-mensageria` se publicar eventos).
+2. Dependa de `core-web` e de `core-auditoria` (com `afitcenter.outbox.habilitado=true` e a tabela `outbox_evento`); de `core-paciente` se referenciar pacientes e de `core-assinatura` se aplicar limites do plano.
 3. Declare o `SecurityFilterChain` com `SegurancaPadrao.configurar(...)` e use `UsuarioAutenticado.nutricionistaId()` em todo acesso a dados.
 4. Crie as migrações em `src/main/resources/db/migration/common` (e `local` para dados fictícios).
 5. Adicione o banco em `docker/postgres/01-criar-bancos.sh`, o serviço no `compose.yml`/`compose.prod.yml` e a rota no `GatewayConfig`.

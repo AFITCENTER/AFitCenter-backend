@@ -1,6 +1,0 @@
-br\com\afitcenter\core\paciente\PacienteRefRepository.class
-br\com\afitcenter\core\paciente\PacienteRefService.class
-br\com\afitcenter\core\paciente\PacienteEventosListener.class
-br\com\afitcenter\core\paciente\ReplicaPacienteAutoConfiguration.class
-br\com\afitcenter\core\paciente\PacienteInternoClient.class
-br\com\afitcenter\core\paciente\PacienteRef.class

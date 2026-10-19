@@ -28,7 +28,10 @@ public class GatewayConfig {
             new String[]{"ms-paciente", "ms-paciente"},
             new String[]{"ms-consulta", "ms-consulta"},
             new String[]{"ms-avaliacao", "ms-avaliacao"},
-            new String[]{"ms-dieta", "ms-dieta"}
+            new String[]{"ms-dieta", "ms-dieta"},
+            new String[]{"ms-planos", "ms-planos"},
+            new String[]{"ms-pagamentos", "ms-pagamentos"},
+            new String[]{"ms-auditoria", "ms-auditoria"}
     );
 
     @Bean
@@ -48,7 +51,23 @@ public class GatewayConfig {
                         .path("/ms-nutricionista/v1/cadastros")
                         .and().method(HttpMethod.POST)
                         .filters(f -> f.stripPrefix(1).filter(jwtAuthFilter.opcional()))
-                        .uri("lb://ms-nutricionista"));
+                        .uri("lb://ms-nutricionista"))
+
+                // Catálogo de planos (página de preços, público).
+                .route("ms-planos-catalogo", r -> r
+                        .order(ROTA_PUBLICA)
+                        .path("/ms-planos/v1/planos", "/ms-planos/v1/planos/*")
+                        .and().method(HttpMethod.GET)
+                        .filters(f -> f.stripPrefix(1).filter(jwtAuthFilter.opcional()))
+                        .uri("lb://ms-planos"))
+
+                // Webhooks dos provedores de pagamento: sem JWT, o ms-pagamentos confere a assinatura de cada um.
+                .route("ms-pagamentos-webhooks", r -> r
+                        .order(ROTA_PUBLICA)
+                        .path("/ms-pagamentos/v1/webhooks/*")
+                        .and().method(HttpMethod.POST)
+                        .filters(f -> f.stripPrefix(1).filter(jwtAuthFilter.opcional()))
+                        .uri("lb://ms-pagamentos"));
 
         if (docsHabilitado) {
             for (String[] servico : SERVICOS_PROTEGIDOS) {
