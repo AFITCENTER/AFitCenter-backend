@@ -3,8 +3,10 @@ package br.com.afitcenter.pagamentos.model.dto;
 import br.com.afitcenter.pagamentos.model.entity.Cobranca;
 import br.com.afitcenter.pagamentos.model.enums.Enums.FormaPagamento;
 import br.com.afitcenter.pagamentos.model.enums.Enums.StatusCobranca;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -33,7 +35,19 @@ public final class Dtos {
             @NotBlank @Size(max = 200) String descricao,
             @NotNull @DecimalMin("0.01") @Digits(integer = 8, fraction = 2) BigDecimal valor,
             @NotNull LocalDate vencimento,
-            @NotNull FormaPagamento formaPagamento
+            @NotNull FormaPagamento formaPagamento,
+            @NotNull @Valid PagadorRequest pagador
+    ) {
+    }
+
+    /**
+     * Quem paga (o nutricionista, na assinatura). Vai só para o provedor, que exige nome e CPF/CNPJ para emitir
+     * Pix e boleto; o ms-pagamentos não guarda estes dados.
+     */
+    public record PagadorRequest(
+            @NotBlank @Size(max = 150) String nome,
+            @NotBlank @Pattern(regexp = "\\d{11}|\\d{14}", message = "Informe o CPF ou CNPJ só com números.") String cpfCnpj,
+            @NotBlank @Email @Size(max = 254) String email
     ) {
     }
 

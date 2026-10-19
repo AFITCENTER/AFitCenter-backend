@@ -56,6 +56,9 @@ public class NotificacaoService {
                     VALUES (?, ?, ?, ?) ON CONFLICT (provedor, id_evento) DO NOTHING
                     """, provedor.nome(), notificacao.idEvento(), notificacao.tipo().name(), notificacao.idExterno());
             if (nova == 0) return "repetida";
+            // Eventos que não mudam nada (cobrança criada, boleto visualizado...) nem carregam a cobrança.
+            if (notificacao.tipo() == NotificacaoPagamento.Tipo.IGNORADA)
+                return registrarResultado(provedor, notificacao, "ignorada");
 
             Optional<Cobranca> cobranca = repository.findByProvedorAndIdExterno(provedor.nome(), notificacao.idExterno())
                     .map(c -> cobrancaService.bloquear(c.getId()));
@@ -64,9 +67,13 @@ public class NotificacaoService {
                 log.warn("Notificação {} do provedor {} para a cobrança desconhecida {}.", notificacao.idEvento(),
                         provedor.nome(), notificacao.idExterno());
 
-            jdbc.update("UPDATE notificacao_provedor SET resultado = ? WHERE provedor = ? AND id_evento = ?",
-                    resultado, provedor.nome(), notificacao.idEvento());
-            return resultado;
+            return registrarResultado(provedor, notificacao, resultado);
         });
+    }
+
+    private String registrarResultado(ProvedorPagamento provedor, NotificacaoPagamento notificacao, String resultado) {
+        jdbc.update("UPDATE notificacao_provedor SET resultado = ? WHERE provedor = ? AND id_evento = ?",
+                resultado, provedor.nome(), notificacao.idEvento());
+        return resultado;
     }
 }

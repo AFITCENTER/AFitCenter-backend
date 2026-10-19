@@ -22,12 +22,15 @@ public class WebhookController {
 
     private final NotificacaoService service;
 
-    /** O corpo é lido como texto: a assinatura é conferida sobre os bytes exatos recebidos. */
+    /**
+     * O corpo é lido como texto: a assinatura é conferida sobre os bytes exatos recebidos. Responde 200 (não 204):
+     * o Asaas trata qualquer outro status como falha e pausa a fila de webhooks depois de 15 seguidas.
+     */
     @PostMapping("/{provedor}")
     @Operation(summary = "Receber notificação do provedor", description = "Reentregas da mesma notificação são ignoradas.")
     public ResponseEntity<Void> receber(@PathVariable String provedor, @RequestHeader HttpHeaders headers,
                                         @RequestBody(required = false) String corpo) {
         service.processar(provedor, headers.toSingleValueMap(), corpo);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok().build();
     }
 }

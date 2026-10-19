@@ -9,6 +9,7 @@ import br.com.afitcenter.pagamentos.provedor.ProvedorSimulado;
 import br.com.afitcenter.pagamentos.service.CobrancaService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -74,6 +75,14 @@ class PagamentosIntegracaoTest {
 
         mvc.perform(post("/internal/cobrancas").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isUnauthorized());
+        ObjectNode semPagador = json.createObjectNode().put("chaveIdempotencia", "fatura:" + UUID.randomUUID() + ":1")
+                .put("nutricionistaId", ana.toString()).put("origem", "ASSINATURA")
+                .put("referenciaId", UUID.randomUUID().toString()).put("descricao", "Assinatura")
+                .put("valor", 89.90).put("vencimento", LocalDate.now().plusDays(3).toString()).put("formaPagamento", "PIX");
+        criar(semPagador).andExpect(status().isBadRequest());
+        semPagador.putObject("pagador").put("nome", "Ana").put("cpfCnpj", "529.982.247-25").put("email", "ana@teste.local");
+        criar(semPagador).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros['pagador.cpfCnpj']").value("Informe o CPF ou CNPJ só com números."));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox_evento WHERE routing_key = 'auditoria.registro' "
                 + "AND payload->>'recursoId' = ? AND payload->>'acao' = 'CRIACAO'", Long.class, criada.get("id").asText()))
                 .as("criação registrada na trilha").isEqualTo(1);
@@ -138,13 +147,13 @@ class PagamentosIntegracaoTest {
         webhook("outro", corpo, simulado.assinar(corpo)).andExpect(status().isNotFound());
         assertThat(statusDa(id)).isEqualTo("PENDENTE");
 
-        webhook("simulado", corpo, simulado.assinar(corpo)).andExpect(status().isNoContent());
-        webhook("SIMULADO", corpo, simulado.assinar(corpo)).andExpect(status().isNoContent());
+        webhook("simulado", corpo, simulado.assinar(corpo)).andExpect(status().isOk());
+        webhook("SIMULADO", corpo, simulado.assinar(corpo)).andExpect(status().isOk());
         assertThat(statusDa(id)).isEqualTo("PAGA");
         assertThat(contarEventos(id, "cobranca.paga")).as("reentrega não publica de novo").isEqualTo(1);
 
         String desconhecida = simulado.notificacao("sim_inexistente", Tipo.PAGAMENTO_CONFIRMADO, BigDecimal.ONE);
-        webhook("simulado", desconhecida, simulado.assinar(desconhecida)).andExpect(status().isNoContent());
+        webhook("simulado", desconhecida, simulado.assinar(desconhecida)).andExpect(status().isOk());
     }
 
     @Test
@@ -178,7 +187,7 @@ class PagamentosIntegracaoTest {
 
         String idExterno = jdbc.queryForObject("SELECT id_externo FROM cobranca WHERE id = ?", String.class, id);
         String corpo = simulado.notificacao(idExterno, Tipo.PAGAMENTO_CONFIRMADO, new BigDecimal("89.90"));
-        webhook("simulado", corpo, simulado.assinar(corpo)).andExpect(status().isNoContent());
+        webhook("simulado", corpo, simulado.assinar(corpo)).andExpect(status().isOk());
         assertThat(statusDa(id)).isEqualTo("PAGA");
     }
 
@@ -215,7 +224,7 @@ class PagamentosIntegracaoTest {
 
     private ResultActions criar(String chave, UUID nutricionista, UUID referencia, String forma, LocalDate vencimento)
             throws Exception {
-        String corpo = json.createObjectNode()
+        ObjectNode corpo = json.createObjectNode()
                 .put("chaveIdempotencia", chave)
                 .put("nutricionistaId", nutricionista.toString())
                 .put("origem", "ASSINATURA")
@@ -223,10 +232,14 @@ class PagamentosIntegracaoTest {
                 .put("descricao", "AFitCenter - assinatura do plano Profissional (mensal)")
                 .put("valor", new BigDecimal("89.90"))
                 .put("vencimento", vencimento.toString())
-                .put("formaPagamento", forma)
-                .toString();
+                .put("formaPagamento", forma);
+        corpo.putObject("pagador").put("nome", "Ana Nutri").put("cpfCnpj", "52998224725").put("email", "ana@teste.local");
+        return criar(corpo);
+    }
+
+    private ResultActions criar(ObjectNode corpo) throws Exception {
         return mvc.perform(post("/internal/cobrancas").header("X-Internal-Token", ChavesTeste.TOKEN_INTERNO)
-                .contentType(MediaType.APPLICATION_JSON).content(corpo));
+                .contentType(MediaType.APPLICATION_JSON).content(corpo.toString()));
     }
 
     private UUID novaCobranca(UUID nutricionista, String forma) throws Exception {

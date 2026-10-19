@@ -5,8 +5,10 @@ import br.com.afitcenter.core.mensageria.evento.CobrancaEvento;
 import br.com.afitcenter.core.teste.TesteIntegracao;
 import br.com.afitcenter.core.teste.TokensTeste;
 import br.com.afitcenter.planos.integracao.CobrancaInternoClient;
+import br.com.afitcenter.planos.integracao.NutricionistaInternoClient;
 import br.com.afitcenter.planos.model.dto.Dtos.CobrancaResponse;
 import br.com.afitcenter.planos.model.dto.Dtos.CriarCobrancaRequest;
+import br.com.afitcenter.planos.model.dto.Dtos.NutricionistaInternoResponse;
 import br.com.afitcenter.planos.service.CicloAssinaturaService;
 import br.com.afitcenter.planos.service.PagamentoService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -35,7 +37,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Base dos testes do ms-planos: mesmo contexto para todas as classes, agendador desligado (os testes chamam o
- * {@link CicloAssinaturaService} com o instante que quiserem) e o ms-pagamentos simulado por mock.
+ * {@link CicloAssinaturaService} com o instante que quiserem) e o ms-pagamentos e o ms-nutricionista simulados por
+ * mock.
  */
 @TesteIntegracao
 @TestPropertySource(properties = "afitcenter.planos.agendador.habilitado=false")
@@ -54,6 +57,8 @@ abstract class IntegracaoBase {
 
     @MockitoBean
     protected CobrancaInternoClient cobrancaClient;
+    @MockitoBean
+    protected NutricionistaInternoClient nutricionistaClient;
 
     protected final UUID ana = UUID.randomUUID();
     protected final UUID bruno = UUID.randomUUID();
@@ -61,6 +66,8 @@ abstract class IntegracaoBase {
     @BeforeEach
     void cobrancasDoMsPagamentos() {
         when(cobrancaClient.criar(any())).thenAnswer(inv -> cobranca(inv.getArgument(0)));
+        when(nutricionistaClient.buscar(any())).thenAnswer(inv -> new NutricionistaInternoResponse(inv.getArgument(0),
+                "Nutri Teste", "52998224725", "nutri@teste.local"));
     }
 
     protected static CobrancaResponse cobranca(CriarCobrancaRequest pedido) {

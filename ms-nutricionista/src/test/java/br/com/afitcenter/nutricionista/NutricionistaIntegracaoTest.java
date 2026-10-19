@@ -205,6 +205,26 @@ class NutricionistaIntegracaoTest {
     }
 
     @Test
+    void pagadorDaAssinaturaPelaRotaInterna() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(autenticacaoClient.criar(any())).thenReturn(new UsuarioCriadoResponse(id));
+        String cpf = DadosTeste.cpf();
+        String email = DadosTeste.email("pagadora");
+        cadastrar(cadastro(cpf, String.valueOf(System.nanoTime() % 10_000_000), email)).andExpect(status().isCreated());
+
+        mvc.perform(get("/internal/nutricionistas/" + id).header("X-Internal-Token", "token-interno-teste"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("Nutri Teste"))
+                .andExpect(jsonPath("$.cpf").value(cpf))
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.crnNumero").doesNotExist());
+        mvc.perform(get("/internal/nutricionistas/" + id).header("Authorization", TokensTeste.nutricionista(id)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/internal/nutricionistas/" + UUID.randomUUID()).header("X-Internal-Token", "token-interno-teste"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void rotasDoNutricionistaExigemPapelNutricionista() throws Exception {
         mvc.perform(get("/v1/nutricionistas/me")).andExpect(status().isUnauthorized());
         mvc.perform(get("/v1/nutricionistas/me").header("Authorization",

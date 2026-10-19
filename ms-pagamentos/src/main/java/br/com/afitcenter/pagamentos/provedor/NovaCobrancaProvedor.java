@@ -11,5 +11,5 @@ import java.util.UUID;
  * provedor: repetir a chamada depois de um timeout não cria uma segunda cobrança lá.
  */
 public record NovaCobrancaProvedor(UUID cobrancaId, String descricao, BigDecimal valor, LocalDate vencimento,
-                                   FormaPagamento formaPagamento) {
+                                   FormaPagamento formaPagamento, Pagador pagador) {
 }

@@ -247,9 +247,13 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${PAGAMENTOS_DB_NAME:-afit_pagamentos}
       SPRING_DATASOURCE_USERNAME: ${PAGAMENTOS_DB_USER:-afit_pagamentos}
       SPRING_DATASOURCE_PASSWORD: ${PAGAMENTOS_DB_PASSWORD}
-      # Só o ms-pagamentos conhece o provedor e o segredo dos webhooks.
+      # Só o ms-pagamentos conhece o provedor, a chave de API e os segredos dos webhooks.
       AFIT_PAGAMENTOS_PROVEDOR: ${AFIT_PAGAMENTOS_PROVEDOR:-SIMULADO}
       AFIT_PAGAMENTOS_WEBHOOK_SEGREDO: ${AFIT_PAGAMENTOS_WEBHOOK_SEGREDO:?defina AFIT_PAGAMENTOS_WEBHOOK_SEGREDO}
+      AFIT_PAGAMENTOS_ASAAS_HABILITADO: ${AFIT_PAGAMENTOS_ASAAS_HABILITADO:-false}
+      AFIT_PAGAMENTOS_ASAAS_URL: ${AFIT_PAGAMENTOS_ASAAS_URL:-https://api-sandbox.asaas.com/v3}
+      AFIT_PAGAMENTOS_ASAAS_CHAVE_API: ${AFIT_PAGAMENTOS_ASAAS_CHAVE_API:-}
+      AFIT_PAGAMENTOS_ASAAS_TOKEN_WEBHOOK: ${AFIT_PAGAMENTOS_ASAAS_TOKEN_WEBHOOK:-}
     depends_on: *depende-infra
 
   ms-auditoria:

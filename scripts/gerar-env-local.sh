@@ -87,6 +87,12 @@ AFIT_LOGIN_BLOQUEIO_MINUTOS=15
 
 AFIT_PAGAMENTOS_PROVEDOR=SIMULADO
 AFIT_PAGAMENTOS_WEBHOOK_SEGREDO=$(hex 32)
+# Asaas sandbox: preencha a chave (entre aspas simples, ela começa com \$), habilite e cadastre o token
+# abaixo no webhook do Asaas. Para cobrar por ele, AFIT_PAGAMENTOS_PROVEDOR=ASAAS.
+AFIT_PAGAMENTOS_ASAAS_HABILITADO=false
+AFIT_PAGAMENTOS_ASAAS_URL=https://api-sandbox.asaas.com/v3
+AFIT_PAGAMENTOS_ASAAS_CHAVE_API=
+AFIT_PAGAMENTOS_ASAAS_TOKEN_WEBHOOK=$(hex 32)
 AUDITORIA_RETENCAO_DIAS=1825
 EOF
 

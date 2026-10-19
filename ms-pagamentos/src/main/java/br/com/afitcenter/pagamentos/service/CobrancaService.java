@@ -16,8 +16,10 @@ import br.com.afitcenter.pagamentos.model.enums.Enums.StatusCobranca;
 import br.com.afitcenter.pagamentos.provedor.DadosPagamento;
 import br.com.afitcenter.pagamentos.provedor.NotificacaoPagamento;
 import br.com.afitcenter.pagamentos.provedor.NovaCobrancaProvedor;
+import br.com.afitcenter.pagamentos.provedor.Pagador;
 import br.com.afitcenter.pagamentos.provedor.ProvedorPagamento;
 import br.com.afitcenter.pagamentos.provedor.ProvedorPagamento.CobrancaJaPagaException;
+import br.com.afitcenter.pagamentos.provedor.ProvedorPagamento.EstornoIndisponivelException;
 import br.com.afitcenter.pagamentos.provedor.Provedores;
 import br.com.afitcenter.pagamentos.repository.CobrancaRepository;
 import br.com.afitcenter.pagamentos.repository.CobrancaRepository.Filtros;
@@ -90,10 +92,12 @@ public class CobrancaService {
         if (cobranca.criadaNoProvedor()) return CobrancaResponse.de(cobranca);
 
         ProvedorPagamento provedor = provedores.daCobranca(cobranca.getProvedor());
+        var pagador = new Pagador(cobranca.getNutricionistaId(), dados.pagador().nome().trim(),
+                dados.pagador().cpfCnpj(), dados.pagador().email().trim());
         DadosPagamento pagamento;
         try {
             pagamento = provedor.criar(new NovaCobrancaProvedor(cobranca.getId(), cobranca.getDescricao(),
-                    cobranca.getValor(), cobranca.getVencimento(), cobranca.getFormaPagamento()));
+                    cobranca.getValor(), cobranca.getVencimento(), cobranca.getFormaPagamento(), pagador));
         } catch (RuntimeException e) {
             throw new ProvedorIndisponivelException("O provedor de pagamento não criou a cobrança.", e);
         }
@@ -171,6 +175,8 @@ public class CobrancaService {
             throw new RegraNegocioException("Só cobranças pagas podem ser estornadas.");
         try {
             provedores.daCobranca(cobranca.getProvedor()).estornar(cobranca.getIdExterno(), cobranca.getValorPago());
+        } catch (EstornoIndisponivelException e) {
+            throw new RegraNegocioException(e.getMessage());
         } catch (RuntimeException e) {
             throw new ProvedorIndisponivelException("O provedor de pagamento não fez o estorno.", e);
         }

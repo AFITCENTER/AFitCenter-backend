@@ -2,6 +2,7 @@ package br.com.afitcenter.planos;
 
 import br.com.afitcenter.core.teste.ChavesTeste;
 import br.com.afitcenter.planos.model.dto.Dtos.CriarCobrancaRequest;
+import br.com.afitcenter.planos.model.dto.Dtos.Pagador;
 import feign.FeignException;
 import feign.Request;
 import org.junit.jupiter.api.Test;
@@ -73,6 +74,9 @@ class AssinaturaIntegracaoTest extends IntegracaoBase {
         assertThat(pedido.getValue().nutricionistaId()).isEqualTo(ana);
         assertThat(pedido.getValue().valor()).isEqualByComparingTo("89.90");
         assertThat(pedido.getValue().chaveIdempotencia()).isEqualTo("fatura:" + fatura + ":1");
+        assertThat(pedido.getValue().pagador()).as("pagador buscado no ms-nutricionista")
+                .isEqualTo(new Pagador("Nutri Teste", "52998224725", "nutri@teste.local"));
+        verify(nutricionistaClient).buscar(ana);
         assertThat(cobrancaDa(fatura)).isNotNull();
 
         assertThat(jdbc.queryForObject("""

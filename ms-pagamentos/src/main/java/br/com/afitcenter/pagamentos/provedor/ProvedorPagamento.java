@@ -20,6 +20,11 @@ public interface ProvedorPagamento {
     /** Idempotente. Se a cobrança já foi paga no provedor, lança {@link CobrancaJaPagaException}. */
     void cancelar(String idExterno);
 
+    /**
+     * Devolve o valor pago. Idempotente: estorno já pedido não é pedido de novo.
+     *
+     * @throws EstornoIndisponivelException se o provedor não estorna esta cobrança pela API
+     */
     void estornar(String idExterno, BigDecimal valor);
 
     /**
@@ -40,6 +45,14 @@ public interface ProvedorPagamento {
 
         public CobrancaJaPagaException(String idExterno) {
             super("A cobrança " + idExterno + " já foi paga no provedor.");
+        }
+    }
+
+    /** A mensagem diz ao administrador como estornar (ex.: pelo painel do provedor). */
+    class EstornoIndisponivelException extends RuntimeException {
+
+        public EstornoIndisponivelException(String mensagem) {
+            super(mensagem);
         }
     }
 }

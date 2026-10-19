@@ -50,7 +50,7 @@ backend/
 | `ms-avaliacao` | `/ms-avaliacao` | Avaliação corporal, metas, exames, evolução (req. 3 e 6) | esquema, catálogos e réplica; CRUD a implementar |
 | `ms-dieta` | `/ms-dieta` | Alimentos e dietas (req. 5) | esquema, catálogos, réplica e busca de alimentos; CRUD a implementar |
 | `ms-planos` | `/ms-planos` | Planos da plataforma, assinatura do nutricionista, faturas, renovação e inadimplência | pronto |
-| `ms-pagamentos` | `/ms-pagamentos` | Cobranças (Pix, boleto, cartão) num provedor plugável, webhooks, vencimento e estorno | pronto, só com o provedor simulado |
+| `ms-pagamentos` | `/ms-pagamentos` | Cobranças (Pix, boleto, cartão) num provedor plugável, webhooks, vencimento e estorno | pronto: simulador (padrão) e Asaas, este ainda não validado no sandbox |
 | `ms-auditoria` | `/ms-auditoria` | Trilha de auditoria de todos os serviços (LGPD) | pronto |
 
 ## Stack
@@ -99,7 +99,7 @@ curl -s -X POST http://localhost:8080/ms-pagamentos/v1/simulador/cobrancas/<cobr
 curl -s "http://localhost:8080/ms-auditoria/v1/auditoria/registros?pacienteId=<id>" -H "Authorization: Bearer <accessToken>"
 ```
 
-> O único provedor de pagamento é o **simulador**: nenhuma cobrança é real. Para cobrar de verdade, implemente `ProvedorPagamento` no ms-pagamentos e mude `AFIT_PAGAMENTOS_PROVEDOR` (detalhes em [docs/ARQUITETURA.md](../docs/ARQUITETURA.md#assinatura-da-plataforma)).
+> O provedor de pagamento padrão é o **simulador**: nenhuma cobrança é real. O ms-pagamentos também fala com o **Asaas** (Pix, boleto e cartão pela fatura hospedada). Para usá-lo, preencha `AFIT_PAGAMENTOS_ASAAS_*` no `.env` (a chave entre aspas simples, porque começa com `$`), cadastre no painel do Asaas o webhook `<gateway>/ms-pagamentos/v1/webhooks/asaas` com o mesmo token e troque `AFIT_PAGAMENTOS_PROVEDOR=ASAAS`. A URL padrão é a do sandbox. Detalhes em [docs/ARQUITETURA.md](../docs/ARQUITETURA.md#assinatura-da-plataforma).
 
 Para rodar um serviço pela IDE usando a infraestrutura do Docker, acrescente `-f compose.dev.yml` (publica PostgreSQL e RabbitMQ em `127.0.0.1`) e exporte as variáveis do `.env.local` com `<SERVICO>_DB_HOST=localhost`, `RABBITMQ_HOST=localhost` e o `EUREKA_URL` apontando para `localhost:8761`.
 
@@ -119,13 +119,13 @@ cd backend
 mvn verify
 ```
 
-Compila todos os módulos e roda os testes. Os testes de integração (`@TesteIntegracao`) sobem cada serviço com PostgreSQL 17 embutido, aplicam as migrações Flyway e validam o mapeamento JPA (`ddl-auto=validate`). Eureka e RabbitMQ ficam desligados nos testes; os eventos (inclusive a trilha de auditoria) são conferidos na tabela `outbox_evento`. Os agendadores do ms-planos, ms-pagamentos e ms-auditoria também ficam desligados: os testes chamam os serviços com o instante que quiserem.
+Compila todos os módulos e roda os testes. Os testes de integração (`@TesteIntegracao`) sobem cada serviço com PostgreSQL 17 embutido, aplicam as migrações Flyway e validam o mapeamento JPA (`ddl-auto=validate`). Eureka e RabbitMQ ficam desligados nos testes; os eventos (inclusive a trilha de auditoria) são conferidos na tabela `outbox_evento`. Os agendadores do ms-planos, ms-pagamentos e ms-auditoria também ficam desligados: os testes chamam os serviços com o instante que quiserem. Nenhum teste chama a internet: o Asaas é testado contra o `MockRestServiceServer` e contra um servidor HTTP local que imita a API dele (`AsaasFalso`).
 
 Para compilar só um serviço (com o core): `mvn -pl ms-paciente -am verify`.
 
 ## Variáveis de ambiente
 
-Modelo comentado: [.env.example](.env.example). O arquivo passado em `--env-file` serve só para a interpolação do Compose: cada container recebe apenas as variáveis que usa. Só o `ms-autenticacao` recebe a chave privada do JWT, só o `ms-pagamentos` recebe o segredo dos webhooks, o Gateway não recebe nenhum segredo e cada serviço só conhece a senha do próprio banco.
+Modelo comentado: [.env.example](.env.example). O arquivo passado em `--env-file` serve só para a interpolação do Compose: cada container recebe apenas as variáveis que usa. Só o `ms-autenticacao` recebe a chave privada do JWT, só o `ms-pagamentos` recebe a chave de API do provedor de pagamento e os segredos dos webhooks, o Gateway não recebe nenhum segredo e cada serviço só conhece a senha do próprio banco.
 
 > Nunca versione `.env.local`, `.env.homolog`, `.env.prod` ou qualquer arquivo com segredos.
 

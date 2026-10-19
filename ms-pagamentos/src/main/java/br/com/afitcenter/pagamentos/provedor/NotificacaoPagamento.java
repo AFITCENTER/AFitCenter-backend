@@ -7,7 +7,7 @@ import java.time.Instant;
  * Notificação do provedor já autenticada e traduzida.
  *
  * @param idEvento  id da notificação no provedor (reentregas trazem o mesmo id)
- * @param idExterno id da cobrança no provedor
+ * @param idExterno id da cobrança no provedor (pode ser nulo quando o tipo é {@link Tipo#IGNORADA})
  */
 public record NotificacaoPagamento(String idEvento, String idExterno, Tipo tipo, Instant ocorridaEm, BigDecimal valorPago) {
 

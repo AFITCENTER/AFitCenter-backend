@@ -161,8 +161,13 @@ public final class Dtos {
             String descricao,
             BigDecimal valor,
             LocalDate vencimento,
-            FormaPagamento formaPagamento
+            FormaPagamento formaPagamento,
+            Pagador pagador
     ) {
+    }
+
+    /** O provedor de pagamento exige nome e CPF/CNPJ para emitir Pix e boleto. */
+    public record Pagador(String nome, String cpfCnpj, String email) {
     }
 
     /** Dados para pagar: Pix copia e cola, linha digitável do boleto ou página do provedor (cartão). */
@@ -176,6 +181,12 @@ public final class Dtos {
             String boletoLinhaDigitavel,
             String urlPagamento
     ) {
+    }
+
+    // ---------------------------------------------------------------- contrato com o ms-nutricionista
+
+    /** Formato de {@code GET /internal/nutricionistas/{id}}. */
+    public record NutricionistaInternoResponse(UUID id, String nome, String cpf, String email) {
     }
 
     // ---------------------------------------------------------------- rota interna
