@@ -36,6 +36,18 @@ public interface ConsultaRepository extends JpaRepository<Consulta, UUID>, JpaSp
     boolean existeConflito(@Param("nutricionistaId") UUID nutricionistaId, @Param("ignorarId") UUID ignorarId,
                            @Param("inicio") OffsetDateTime inicio, @Param("fim") OffsetDateTime fim);
 
+    /**
+     * Bloqueia a agenda do nutricionista até o fim da transação (advisory lock do PostgreSQL). Marcações simultâneas
+     * do mesmo nutricionista esperam uma pela outra, e a verificação de conflito de quem esperou já enxerga o que a
+     * outra gravou. Chame antes de {@link #existeConflito}, dentro da transação que grava a consulta.
+     */
+    default void bloquearAgenda(UUID nutricionistaId) {
+        bloquearChave(nutricionistaId.getMostSignificantBits() ^ nutricionistaId.getLeastSignificantBits());
+    }
+
+    @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(:chave)", nativeQuery = true)
+    int bloquearChave(@Param("chave") long chave);
+
     /** Filtros da agenda. Critérios nulos são ignorados pelo Spring Data. */
     final class Filtros {
 

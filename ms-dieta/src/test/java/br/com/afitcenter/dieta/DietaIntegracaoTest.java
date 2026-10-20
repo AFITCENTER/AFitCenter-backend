@@ -1,16 +1,29 @@
 package br.com.afitcenter.dieta;
 
+import br.com.afitcenter.core.web.erro.ConflitoException;
 import br.com.afitcenter.dieta.integracao.ConsultaInternoClient.ConsultaRef;
+import br.com.afitcenter.dieta.model.enums.Enums.StatusDieta;
+import br.com.afitcenter.dieta.service.DietaService;
 import feign.FeignException;
 import feign.Request;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -22,6 +35,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Catálogo, regras do esquema, CRUD de dietas e modelos, refeições, itens e substitutos. */
 class DietaIntegracaoTest extends IntegracaoBase {
+
+    @Autowired
+    DietaService dietaService;
+    @Autowired
+    PlatformTransactionManager transactionManager;
 
     @Test
     void alimentosDaBaseOficialMaisOsProprios() throws Exception {
@@ -176,6 +194,52 @@ class DietaIntegracaoTest extends IntegracaoBase {
         adicionarItem(ana, primeira, refeicao, alimentoOficial("Maçã", 3), "100", null, 1)
                 .andExpect(status().isUnprocessableEntity());
         getComo(ana, encerrada).andExpect(status().isOk()).andExpect(jsonPath("$.refeicoes.length()").value(1));
+    }
+
+    @Test
+    void ativacoesSimultaneasNaoDeixamDuasDietasAtivas() throws Exception {
+        UUID paciente = paciente(ana);
+        UUID primeira = dieta(ana, paciente);
+        UUID segunda = dieta(ana, paciente);
+        var primeiraAtivou = new CountDownLatch(1);
+        var liberarPrimeira = new CountDownLatch(1);
+        var transacao = new TransactionTemplate(transactionManager);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            // A primeira ativação grava e segura a transação aberta.
+            Future<?> ativacao = executor.submit(() -> transacao.executeWithoutResult(s -> {
+                dietaService.alterarStatus(ana, primeira, StatusDieta.ATIVA);
+                primeiraAtivou.countDown();
+                aguardar(liberarPrimeira);
+            }));
+            assertThat(primeiraAtivou.await(10, TimeUnit.SECONDS)).isTrue();
+
+            // A segunda não enxerga a primeira (ainda não confirmada) e passa pela verificação do serviço.
+            Future<?> concorrente = executor.submit(() -> dietaService.alterarStatus(ana, segunda, StatusDieta.ATIVA));
+            assertThatThrownBy(() -> concorrente.get(1, TimeUnit.SECONDS))
+                    .as("o índice único faz a segunda esperar a primeira").isInstanceOf(TimeoutException.class);
+
+            liberarPrimeira.countDown();
+            ativacao.get(10, TimeUnit.SECONDS);
+            assertThatThrownBy(() -> concorrente.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class)
+                    .cause().isInstanceOf(ConflitoException.class)
+                    .hasMessage("O paciente já tem uma dieta ativa. Encerre-a ou crie uma nova versão dela.");
+        } finally {
+            liberarPrimeira.countDown();
+            executor.shutdownNow();
+        }
+        assertThat(jdbc.queryForList("SELECT id FROM dieta WHERE paciente_id = ? AND status = 'ATIVA'", UUID.class,
+                paciente)).containsExactly(primeira);
+    }
+
+    private static void aguardar(CountDownLatch latch) {
+        try {
+            if (!latch.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("O teste não liberou a transação.");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test

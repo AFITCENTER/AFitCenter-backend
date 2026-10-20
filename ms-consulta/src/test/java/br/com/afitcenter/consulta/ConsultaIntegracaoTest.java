@@ -1,7 +1,11 @@
 package br.com.afitcenter.consulta;
 
+import br.com.afitcenter.consulta.model.dto.Dtos.ConsultaRequest;
+import br.com.afitcenter.consulta.model.enums.Enums.Modalidade;
+import br.com.afitcenter.consulta.model.enums.Enums.TipoConsulta;
 import br.com.afitcenter.consulta.replica.ConsultorioInternoClient;
 import br.com.afitcenter.consulta.replica.ConsultorioRefService;
+import br.com.afitcenter.consulta.service.ConsultaService;
 import br.com.afitcenter.core.mensageria.evento.ConsultorioEvento;
 import br.com.afitcenter.core.mensageria.evento.PacienteEvento;
 import br.com.afitcenter.core.mensageria.evento.TipoAlteracao;
@@ -11,6 +15,7 @@ import br.com.afitcenter.core.paciente.PacienteRef;
 import br.com.afitcenter.core.teste.ChavesTeste;
 import br.com.afitcenter.core.teste.TesteIntegracao;
 import br.com.afitcenter.core.teste.TokensTeste;
+import br.com.afitcenter.core.web.erro.ConflitoException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
@@ -20,12 +25,23 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -48,6 +64,10 @@ class ConsultaIntegracaoTest {
     PacienteEventosListener pacienteListener;
     @Autowired
     ConsultorioRefService consultorioRefService;
+    @Autowired
+    ConsultaService consultaService;
+    @Autowired
+    PlatformTransactionManager transactionManager;
 
     @MockitoBean
     PacienteInternoClient pacienteClient;
@@ -122,6 +142,41 @@ class ConsultaIntegracaoTest {
 
         mudarStatus(primeira, "CANCELADA").andExpect(status().isOk());
         agendar(ana, consulta(paciente, null, "2026-11-06T09:00:00-03:00", 60)).andExpect(status().isCreated());
+    }
+
+    @Test
+    void marcacoesSimultaneasNoMesmoHorarioNaoPassamJuntas() throws Exception {
+        UUID paciente = pacienteReplicado(ana, "Concorrência", "ATIVO", 0);
+        var pedido = new ConsultaRequest(paciente, null, OffsetDateTime.parse("2026-11-12T09:00:00-03:00"), 60,
+                TipoConsulta.RETORNO, Modalidade.ONLINE, null, null);
+        var primeiraMarcou = new CountDownLatch(1);
+        var liberarPrimeira = new CountDownLatch(1);
+        var transacao = new TransactionTemplate(transactionManager);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            // A primeira marcação grava e segura a transação aberta.
+            Future<?> primeira = executor.submit(() -> transacao.executeWithoutResult(s -> {
+                consultaService.criar(ana, pedido);
+                primeiraMarcou.countDown();
+                aguardar(liberarPrimeira);
+            }));
+            assertThat(primeiraMarcou.await(10, TimeUnit.SECONDS)).isTrue();
+
+            Future<?> segunda = executor.submit(() -> consultaService.criar(ana, pedido));
+            // Sem o bloqueio da agenda, a segunda não enxergaria a primeira (ainda não confirmada) e marcaria junto.
+            assertThatThrownBy(() -> segunda.get(1, TimeUnit.SECONDS)).isInstanceOf(TimeoutException.class);
+
+            liberarPrimeira.countDown();
+            primeira.get(10, TimeUnit.SECONDS);
+            assertThatThrownBy(() -> segunda.get(10, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class)
+                    .hasCauseInstanceOf(ConflitoException.class);
+        } finally {
+            liberarPrimeira.countDown();
+            executor.shutdownNow();
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM consulta WHERE nutricionista_id = ?", Long.class, ana))
+                .isEqualTo(1);
     }
 
     @Test
@@ -238,6 +293,15 @@ class ConsultaIntegracaoTest {
     private ResultActions mudarStatus(UUID consulta, String status) throws Exception {
         return mvc.perform(patch("/v1/consultas/" + consulta + "/status").header("Authorization", TokensTeste.nutricionista(ana))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"" + status + "\"}"));
+    }
+
+    private static void aguardar(CountDownLatch latch) {
+        try {
+            if (!latch.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("O teste não liberou a transação.");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
     }
 
     private UUID idDe(ResultActions resultado) throws Exception {

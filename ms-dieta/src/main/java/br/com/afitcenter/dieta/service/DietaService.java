@@ -18,6 +18,7 @@ import br.com.afitcenter.dieta.repository.DietaRepository;
 import br.com.afitcenter.dieta.repository.DietaRepository.Filtros;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -41,6 +42,8 @@ import java.util.stream.Collectors;
 public class DietaService {
 
     private static final int TAMANHO_MAXIMO_PAGINA = 200;
+    private static final String INDICE_DIETA_ATIVA = "ux_dieta_ativa_por_paciente";
+    private static final String JA_TEM_ATIVA = "O paciente já tem uma dieta ativa. Encerre-a ou crie uma nova versão dela.";
 
     private final DietaRepository repository;
     private final PacienteRefService pacienteRefService;
@@ -112,10 +115,10 @@ public class DietaService {
         if (status == StatusDieta.ATIVA && dieta.getStatus() != StatusDieta.ATIVA && !dieta.isModelo()
                 && repository.existsByPacienteIdAndStatusAndDeletadoEmIsNullAndIdNot(dieta.getPacienteId(),
                 StatusDieta.ATIVA, id))
-            throw new ConflitoException("O paciente já tem uma dieta ativa. Encerre-a ou crie uma nova versão dela.");
+            throw new ConflitoException(JA_TEM_ATIVA);
 
         dieta.alterarStatus(status);
-        return resposta(repository.saveAndFlush(dieta));
+        return resposta(gravarStatus(dieta));
     }
 
     @Transactional
@@ -141,7 +144,7 @@ public class DietaService {
             nova.alterarStatus(StatusDieta.ATIVA);
         }
         repository.saveAndFlush(anterior);
-        repository.save(nova);
+        gravarStatus(nova);
         conteudoService.copiar(anterior.getId(), nova.getId());
         return detalhe(nova);
     }
@@ -174,6 +177,20 @@ public class DietaService {
         Dieta dieta = entidade(nutricionistaId, id);
         dieta.exigirEditavel();
         return dieta;
+    }
+
+    /**
+     * Grava a dieta que pode ter virado ATIVA. A verificação acima não basta quando duas ativações chegam juntas: o
+     * índice único do banco recusa a segunda.
+     */
+    private Dieta gravarStatus(Dieta dieta) {
+        try {
+            return repository.saveAndFlush(dieta);
+        } catch (DataIntegrityViolationException e) {
+            if (String.valueOf(e.getMostSpecificCause().getMessage()).contains(INDICE_DIETA_ATIVA))
+                throw new ConflitoException(JA_TEM_ATIVA);
+            throw e;
+        }
     }
 
     private void preencher(Dieta dieta, UUID nutricionistaId, DietaRequest dados) {
