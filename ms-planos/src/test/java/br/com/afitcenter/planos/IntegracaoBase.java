@@ -5,10 +5,10 @@ import br.com.afitcenter.core.mensageria.evento.CobrancaEvento;
 import br.com.afitcenter.core.teste.TesteIntegracao;
 import br.com.afitcenter.core.teste.TokensTeste;
 import br.com.afitcenter.planos.integracao.CobrancaInternoClient;
-import br.com.afitcenter.planos.integracao.NutricionistaInternoClient;
+import br.com.afitcenter.planos.integracao.PessoaInternoClient;
 import br.com.afitcenter.planos.model.dto.Dtos.CobrancaResponse;
 import br.com.afitcenter.planos.model.dto.Dtos.CriarCobrancaRequest;
-import br.com.afitcenter.planos.model.dto.Dtos.NutricionistaInternoResponse;
+import br.com.afitcenter.planos.model.dto.Dtos.PessoaInternoResponse;
 import br.com.afitcenter.planos.service.CicloAssinaturaService;
 import br.com.afitcenter.planos.service.PagamentoService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -43,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Base dos testes do ms-planos: mesmo contexto para todas as classes, agendador desligado (os testes chamam o
- * {@link CicloAssinaturaService} com o instante que quiserem) e o ms-pagamentos e o ms-nutricionista simulados por
+ * {@link CicloAssinaturaService} com o instante que quiserem) e o ms-pagamentos e o ms-pessoa simulados por
  * mock.
  */
 @TesteIntegracao
@@ -64,7 +64,7 @@ abstract class IntegracaoBase {
     @MockitoBean
     protected CobrancaInternoClient cobrancaClient;
     @MockitoBean
-    protected NutricionistaInternoClient nutricionistaClient;
+    protected PessoaInternoClient pessoaClient;
 
     protected final UUID ana = UUID.randomUUID();
     protected final UUID bruno = UUID.randomUUID();
@@ -72,7 +72,7 @@ abstract class IntegracaoBase {
     @BeforeEach
     void cobrancasDoMsPagamentos() {
         when(cobrancaClient.criar(any())).thenAnswer(inv -> cobranca(inv.getArgument(0)));
-        when(nutricionistaClient.buscar(any())).thenAnswer(inv -> new NutricionistaInternoResponse(inv.getArgument(0),
+        when(pessoaClient.buscar(any())).thenAnswer(inv -> new PessoaInternoResponse(inv.getArgument(0),
                 "Nutri Teste", "52998224725", "nutri@teste.local"));
     }
 

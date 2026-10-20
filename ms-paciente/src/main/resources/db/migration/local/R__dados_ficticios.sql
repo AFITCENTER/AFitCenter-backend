@@ -1,6 +1,8 @@
 -- =====================================================================
 -- Dados FICTICIOS, carregados somente no perfil local.
 -- Os mesmos ids aparecem nas replicas (paciente_ref) do ms-consulta, ms-avaliacao e ms-dieta.
+-- Carlos (b0001) ja tem acesso ao portal: a ficha esta ligada a conta paciente@afitcenter.local
+-- (pessoa a101 do ms-pessoa).
 -- =====================================================================
 
 INSERT INTO paciente (id, nutricionista_id, nome, cpf, data_nascimento, sexo, ocupacao, objetivo,
@@ -15,6 +17,9 @@ INSERT INTO paciente (id, nutricionista_id, nome, cpf, data_nascimento, sexo, oc
    'Paciente do Bruno (ficticio)', NULL, '1979-01-15', 'M', NULL,
    'Controle glicemico', 'SEDENTARIO', 'Campinas', 'SP')
 ON CONFLICT (id) DO NOTHING;
+
+UPDATE paciente SET pessoa_id = '00000000-0000-4000-8000-00000000a101', pessoa_vinculada_em = now()
+WHERE id = '00000000-0000-4000-8000-0000000b0001' AND pessoa_id IS NULL;
 
 INSERT INTO paciente_contato (paciente_id, ordem, tipo, valor, principal) VALUES
   ('00000000-0000-4000-8000-0000000b0001', 0, 'WHATSAPP', '11988880001', true),

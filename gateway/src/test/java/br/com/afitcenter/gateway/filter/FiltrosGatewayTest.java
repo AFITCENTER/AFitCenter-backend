@@ -40,7 +40,7 @@ class FiltrosGatewayTest {
 
     @Test
     void rotaPublicaDescartaTokenInvalidoESegueAnonima() {
-        var exchange = exchange(MockServerHttpRequest.post("/ms-auth/v1/auth/login")
+        var exchange = exchange(MockServerHttpRequest.post("/ms-pessoa/v1/auth/login")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer vencido"));
 
         ServerWebExchange encaminhada = executar(jwtAuthFilter.opcional()::filter, exchange);

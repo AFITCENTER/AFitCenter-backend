@@ -183,10 +183,10 @@ public final class Dtos {
     ) {
     }
 
-    // ---------------------------------------------------------------- contrato com o ms-nutricionista
+    // ---------------------------------------------------------------- contrato com o ms-pessoa
 
-    /** Formato de {@code GET /internal/nutricionistas/{id}}. */
-    public record NutricionistaInternoResponse(UUID id, String nome, String cpf, String email) {
+    /** Formato de {@code GET /internal/pessoas/{id}}. */
+    public record PessoaInternoResponse(UUID id, String nome, String cpf, String email) {
     }
 
     // ---------------------------------------------------------------- rota interna

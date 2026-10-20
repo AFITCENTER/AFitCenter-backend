@@ -9,7 +9,9 @@ import java.util.Set;
 /**
  * Papéis de acesso emitidos no JWT (claim {@code roles}).
  *
- * <p>Na v1 só o nutricionista usa o sistema; {@code PACIENTE} já existe para o futuro portal.</p>
+ * <p>Os papéis de cada pessoa ficam no ms-pessoa, e uma pessoa pode ter mais de um (a nutricionista que também é
+ * paciente de outro nutricionista). {@code NUTRICIONISTA} e {@code PACIENTE} vêm dos cadastros públicos;
+ * {@code ADMIN} nunca é criado por API.</p>
  */
 public enum Papel {
     NUTRICIONISTA,

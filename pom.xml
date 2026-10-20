@@ -19,7 +19,7 @@
         <module>service-registry</module>
         <module>gateway</module>
 
-        <module>ms-autenticacao</module>
+        <module>ms-pessoa</module>
         <module>ms-nutricionista</module>
         <module>ms-paciente</module>
         <module>ms-consulta</module>

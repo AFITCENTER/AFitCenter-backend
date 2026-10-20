@@ -17,7 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/v1/nutricionistas/me")
 @RequiredArgsConstructor
-@Tag(name = "Perfil", description = "Dados profissionais do nutricionista logado (requisito 7).")
+@Tag(name = "Perfil", description = "Dados profissionais do nutricionista logado (requisito 7). Os pessoais ficam no "
+        + "ms-pessoa (GET /v1/conta).")
 public class PerfilController {
 
     private final PerfilService perfilService;
@@ -29,7 +30,8 @@ public class PerfilController {
     }
 
     @PutMapping
-    @Operation(summary = "Atualizar meu perfil", description = "CPF, CRN e e-mail não podem ser alterados por aqui.")
+    @Operation(summary = "Atualizar meu perfil", description = "Especialidades, assinatura, logo e endereço profissional. "
+            + "Nome e telefone mudam no ms-pessoa; CRN não muda.")
     public NutricionistaResponse atualizar(@Valid @RequestBody AtualizarPerfilRequest dados) {
         return perfilService.atualizar(UsuarioAutenticado.nutricionistaId(), dados);
     }

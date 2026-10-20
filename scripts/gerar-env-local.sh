@@ -49,9 +49,9 @@ RABBITMQ_PASSWORD=$(hex 16)
 
 POSTGRES_ADMIN_USER=afit_admin
 POSTGRES_ADMIN_PASSWORD=$(hex 16)
-AUTH_DB_NAME=afit_auth
-AUTH_DB_USER=afit_auth
-AUTH_DB_PASSWORD=$(hex 16)
+PESSOA_DB_NAME=afit_pessoa
+PESSOA_DB_USER=afit_pessoa
+PESSOA_DB_PASSWORD=$(hex 16)
 NUTRICIONISTA_DB_NAME=afit_nutricionista
 NUTRICIONISTA_DB_USER=afit_nutricionista
 NUTRICIONISTA_DB_PASSWORD=$(hex 16)
@@ -84,6 +84,18 @@ AFIT_TOKEN_VALIDADE_MINUTOS=60
 AFIT_INTERNAL_TOKEN=$(hex 32)
 AFIT_LOGIN_MAX_FALHAS=5
 AFIT_LOGIN_BLOQUEIO_MINUTOS=15
+
+# E-mail: no perfil local o padrão é LOG (nada é enviado; o link aparece inteiro no log do ms-pessoa).
+# Para enviar de verdade: AFIT_EMAIL_PROVEDOR=SMTP e o servidor abaixo (ex.: Mailpit em host.docker.internal:1025,
+# com AFIT_SMTP_STARTTLS=false).
+AFIT_EMAIL_REMETENTE='AFitCenter <nao-responda@afitcenter.local>'
+AFIT_FRONTEND_URL=http://localhost:5173
+AFIT_SMTP_HOST=
+AFIT_SMTP_PORT=587
+AFIT_SMTP_USUARIO=
+AFIT_SMTP_SENHA=
+AFIT_SMTP_STARTTLS=true
+AFIT_SENHA_LINK_VALIDADE_MINUTOS=30
 
 AFIT_PAGAMENTOS_PROVEDOR=SIMULADO
 AFIT_PAGAMENTOS_WEBHOOK_SEGREDO=$(hex 32)

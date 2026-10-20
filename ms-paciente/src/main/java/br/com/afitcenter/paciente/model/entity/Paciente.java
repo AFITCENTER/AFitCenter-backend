@@ -32,6 +32,9 @@ import java.util.UUID;
 /**
  * Ficha do paciente. Cada nutricionista tem a própria ficha: a mesma pessoa atendida por dois
  * nutricionistas tem duas fichas independentes (CPF único por nutricionista).
+ *
+ * <p>A ficha pode estar ligada à conta do paciente no ms-pessoa ({@code pessoaId}), que então a vê no portal.
+ * A ligação é feita pelo próprio paciente, com o código de acesso que o nutricionista gera.</p>
  */
 @Getter
 @Entity
@@ -46,9 +49,12 @@ public class Paciente extends EntidadeAuditavel {
     @Column(name = "nutricionista_id", nullable = false, updatable = false)
     private UUID nutricionistaId;
 
-    /** Login do futuro portal do paciente (nulo na v1). */
-    @Column(name = "usuario_id")
-    private UUID usuarioId;
+    /** Conta do paciente no ms-pessoa (portal); nulo enquanto a ficha não foi ligada a uma conta. */
+    @Column(name = "pessoa_id")
+    private UUID pessoaId;
+
+    @Column(name = "pessoa_vinculada_em")
+    private Instant pessoaVinculadaEm;
 
     @Column(nullable = false)
     private String nome;
@@ -117,6 +123,16 @@ public class Paciente extends EntidadeAuditavel {
         this.endereco = endereco;
         this.contatos.clear();
         this.contatos.addAll(contatos);
+    }
+
+    public void vincularPessoa(UUID pessoaId) {
+        this.pessoaId = pessoaId;
+        this.pessoaVinculadaEm = Instant.now();
+    }
+
+    public void desvincularPessoa() {
+        this.pessoaId = null;
+        this.pessoaVinculadaEm = null;
     }
 
     /** Exclusão lógica: prontuário não se apaga (prazo legal de guarda). */

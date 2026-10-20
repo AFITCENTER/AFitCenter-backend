@@ -4,8 +4,8 @@ import br.com.afitcenter.core.web.erro.ConflitoException;
 import br.com.afitcenter.core.web.erro.RegraNegocioException;
 import br.com.afitcenter.planos.model.dto.Dtos.CobrancaResponse;
 import br.com.afitcenter.planos.model.dto.Dtos.CriarCobrancaRequest;
-import br.com.afitcenter.planos.model.dto.Dtos.NutricionistaInternoResponse;
 import br.com.afitcenter.planos.model.dto.Dtos.Pagador;
+import br.com.afitcenter.planos.model.dto.Dtos.PessoaInternoResponse;
 import br.com.afitcenter.planos.model.entity.Fatura;
 import br.com.afitcenter.planos.model.enums.Enums.Ciclo;
 import br.com.afitcenter.planos.model.enums.Enums.TipoFatura;
@@ -24,9 +24,9 @@ public class Cobrancas {
     public static final String ORIGEM = "ASSINATURA";
 
     private final CobrancaInternoClient client;
-    private final NutricionistaInternoClient nutricionistas;
+    private final PessoaInternoClient pessoas;
 
-    /** O pagador (nome, CPF e e-mail) vem do ms-nutricionista a cada emissão: o ms-planos não guarda esses dados. */
+    /** O pagador (nome, CPF e e-mail) vem do ms-pessoa a cada emissão: o ms-planos não guarda esses dados. */
     public CobrancaResponse emitir(Fatura fatura) {
         return client.criar(new CriarCobrancaRequest(fatura.chaveIdempotencia(), fatura.getNutricionistaId(), ORIGEM,
                 fatura.getId(), descricao(fatura), fatura.getValor(), fatura.getVencimento(),
@@ -46,10 +46,10 @@ public class Cobrancas {
 
     private Pagador pagador(UUID nutricionistaId) {
         try {
-            NutricionistaInternoResponse n = nutricionistas.buscar(nutricionistaId);
-            return new Pagador(n.nome(), n.cpf(), n.email());
+            PessoaInternoResponse p = pessoas.buscar(nutricionistaId);
+            return new Pagador(p.nome(), p.cpf(), p.email());
         } catch (FeignException.NotFound e) {
-            throw new RegraNegocioException("Perfil de nutricionista não encontrado para emitir a cobrança.");
+            throw new RegraNegocioException("Cadastro do nutricionista não encontrado para emitir a cobrança.");
         }
     }
 

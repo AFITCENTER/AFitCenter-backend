@@ -6,6 +6,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +22,15 @@ public interface PacienteRepository extends JpaRepository<Paciente, UUID>, JpaSp
     long countByNutricionistaIdAndDeletadoEmIsNull(UUID nutricionistaId);
 
     boolean existsByNutricionistaIdAndCpfAndDeletadoEmIsNullAndIdNot(UUID nutricionistaId, String cpf, UUID id);
+
+    // ---------------------------------------------------------------- portal do paciente (por conta, não por tenant)
+
+    Optional<Paciente> findByIdAndDeletadoEmIsNull(UUID id);
+
+    /** Fichas ativas ligadas à conta, de todos os nutricionistas. */
+    List<Paciente> findAllByPessoaIdAndDeletadoEmIsNullOrderByPessoaVinculadaEm(UUID pessoaId);
+
+    boolean existsByNutricionistaIdAndPessoaIdAndDeletadoEmIsNull(UUID nutricionistaId, UUID pessoaId);
 
     /** Filtros da listagem. Critérios nulos são ignorados pelo Spring Data. */
     final class Filtros {

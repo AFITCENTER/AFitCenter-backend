@@ -79,9 +79,9 @@ class AssinaturaIntegracaoTest extends IntegracaoBase {
         assertThat(pedido.getValue().nutricionistaId()).isEqualTo(ana);
         assertThat(pedido.getValue().valor()).isEqualByComparingTo("89.90");
         assertThat(pedido.getValue().chaveIdempotencia()).isEqualTo("fatura:" + fatura + ":1");
-        assertThat(pedido.getValue().pagador()).as("pagador buscado no ms-nutricionista")
+        assertThat(pedido.getValue().pagador()).as("pagador buscado no ms-pessoa")
                 .isEqualTo(new Pagador("Nutri Teste", "52998224725", "nutri@teste.local"));
-        verify(nutricionistaClient).buscar(ana);
+        verify(pessoaClient).buscar(ana);
         assertThat(cobrancaDa(fatura)).isNotNull();
 
         assertThat(jdbc.queryForObject("""

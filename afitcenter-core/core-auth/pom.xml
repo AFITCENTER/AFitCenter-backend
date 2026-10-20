@@ -12,7 +12,7 @@
 
     <artifactId>core-auth</artifactId>
     <name>AFitCenter :: Core Auth</name>
-    <description>Emissão (só no ms-autenticacao) e verificação (todos os demais) do JWT ES256.</description>
+    <description>Emissão (só no ms-pessoa) e verificação (todos os demais) do JWT ES256.</description>
 
     <dependencies>
         <dependency>

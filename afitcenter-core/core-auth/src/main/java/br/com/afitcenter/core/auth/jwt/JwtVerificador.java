@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Valida tokens de acesso assinados pelo ms-autenticacao (ES256).
+ * Valida tokens de acesso assinados pelo ms-pessoa (ES256).
  *
  * <p>Usa apenas a chave pública: quem verifica tokens não consegue emiti-los. Por isso o
  * Gateway e os microsserviços validam o JWT sem receber nenhum segredo capaz de forjar

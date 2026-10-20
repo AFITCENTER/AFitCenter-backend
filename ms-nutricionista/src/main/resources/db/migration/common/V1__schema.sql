@@ -8,19 +8,16 @@ BEGIN
   RETURN NEW;
 END $$;
 
--- id = usuario.id no ms-autenticacao = tenant de todos os dados do nutricionista
+-- Perfil profissional. id = pessoa.id no ms-pessoa = tenant de todos os dados do nutricionista.
+-- Nome, CPF, e-mail (login) e telefone ficam só no ms-pessoa.
 CREATE TABLE nutricionista (
   id              uuid PRIMARY KEY,
-  nome            text NOT NULL,
-  cpf             varchar(11) NOT NULL UNIQUE CHECK (cpf ~ '^[0-9]{11}$'),
   crn_regiao      integer NOT NULL CHECK (crn_regiao > 0),   -- CRN-3 → 3
   crn_numero      varchar(20) NOT NULL,
-  email           text NOT NULL,                             -- cópia do login, para contato e PDF
-  telefone        varchar(20),
   especialidades  text,
   assinatura_url  text,                                      -- usada no PDF da dieta
   logo_url        text,
-  -- endereço
+  -- endereço profissional
   cep             varchar(8),
   logradouro      text,
   numero          varchar(20),

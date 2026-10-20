@@ -3,6 +3,10 @@
 --
 -- Cada nutricionista tem a própria ficha de cada paciente. A mesma pessoa atendida por dois
 -- nutricionistas tem duas fichas independentes: CPF único POR nutricionista.
+--
+-- Portal do paciente: a conta do paciente (pessoa no ms-pessoa) é ligada à ficha com um código de
+-- acesso que o nutricionista gera e entrega a ele. Uma conta enxerga todas as fichas ligadas a ela,
+-- no máximo uma por nutricionista.
 -- =====================================================================
 
 CREATE FUNCTION set_atualizado_em() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -14,7 +18,8 @@ END $$;
 CREATE TABLE paciente (
   id                uuid PRIMARY KEY,
   nutricionista_id  uuid NOT NULL,                           -- tenant (id do nutricionista)
-  usuario_id        uuid,                                    -- futuro portal do paciente
+  pessoa_id         uuid,                                    -- conta do paciente no ms-pessoa (portal); NULL = sem acesso
+  pessoa_vinculada_em timestamptz,                           -- quando a conta foi ligada à ficha
   nome              text NOT NULL,
   nome_social       text,
   cpf               varchar(11) CHECK (cpf ~ '^[0-9]{11}$'),  -- opcional (ex.: crianças)
@@ -40,9 +45,22 @@ CREATE TABLE paciente (
 CREATE UNIQUE INDEX ux_paciente_cpf_por_nutricionista
   ON paciente (nutricionista_id, cpf) WHERE cpf IS NOT NULL AND deletado_em IS NULL;
 CREATE INDEX ix_paciente_nutricionista_nome ON paciente (nutricionista_id, lower(nome)) WHERE deletado_em IS NULL;
-CREATE INDEX ix_paciente_usuario ON paciente (usuario_id) WHERE usuario_id IS NOT NULL;
+-- Uma conta tem no máximo uma ficha ativa por nutricionista
+CREATE UNIQUE INDEX ux_paciente_pessoa_por_nutricionista
+  ON paciente (nutricionista_id, pessoa_id) WHERE pessoa_id IS NOT NULL AND deletado_em IS NULL;
+-- Fichas da conta, no portal do paciente
+CREATE INDEX ix_paciente_pessoa ON paciente (pessoa_id) WHERE pessoa_id IS NOT NULL AND deletado_em IS NULL;
 CREATE TRIGGER trg_paciente_atualizado_em BEFORE UPDATE ON paciente
   FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
+-- Código que o nutricionista entrega ao paciente para ligar a ficha à conta dele. Um por ficha (gerar
+-- outro substitui o anterior), de uso único e com validade. Só o hash é guardado.
+CREATE TABLE codigo_acesso (
+  paciente_id  uuid PRIMARY KEY REFERENCES paciente (id) ON DELETE CASCADE,
+  codigo_hash  text NOT NULL UNIQUE,                         -- SHA-256 do código normalizado
+  expira_em    timestamptz NOT NULL,
+  criado_em    timestamptz NOT NULL DEFAULT now()
+);
 
 CREATE TABLE paciente_contato (
   paciente_id  uuid NOT NULL REFERENCES paciente (id) ON DELETE CASCADE,

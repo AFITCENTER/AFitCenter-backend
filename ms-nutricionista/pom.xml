@@ -14,8 +14,8 @@
     <artifactId>ms-nutricionista</artifactId>
     <name>AFitCenter :: ms-nutricionista</name>
     <description>
-        Cadastro e perfil do nutricionista (requisito 7) e consultórios. Orquestra o cadastro com o
-        ms-autenticacao e publica eventos de consultório.
+        Cadastro e perfil profissional do nutricionista (requisito 7) e consultórios. Orquestra o cadastro com o
+        ms-pessoa (dados pessoais e acesso) e publica eventos de consultório.
     </description>
 
     <dependencies>

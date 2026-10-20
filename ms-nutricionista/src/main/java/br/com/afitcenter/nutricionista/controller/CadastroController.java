@@ -26,11 +26,14 @@ public class CadastroController {
 
     @PostMapping
     @Operation(summary = "Cadastrar nutricionista",
-            description = "Cria a conta de acesso e o perfil profissional. Depois, faça login no ms-auth.",
+            description = "Cria a conta de acesso no ms-pessoa e o perfil profissional. Quem já tem conta (como paciente) "
+                    + "informa o mesmo e-mail e senha, e a conta ganha o papel de nutricionista. Depois, faça login no "
+                    + "ms-pessoa.",
             responses = {
                     @ApiResponse(responseCode = "201", description = "Cadastro criado"),
                     @ApiResponse(responseCode = "400", description = "Dados inválidos"),
-                    @ApiResponse(responseCode = "409", description = "E-mail, CPF ou CRN já cadastrado")
+                    @ApiResponse(responseCode = "409", description = "CRN ou CPF já cadastrado, ou e-mail de outra conta com outra senha"),
+                    @ApiResponse(responseCode = "429", description = "Muitas tentativas com senha incorreta")
             })
     public ResponseEntity<CadastroResponse> cadastrar(@Valid @RequestBody CadastroRequest dados,
                                                       HttpServletRequest request) {

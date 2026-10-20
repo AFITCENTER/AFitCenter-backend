@@ -12,7 +12,7 @@ import java.util.Collection;
 import java.util.UUID;
 
 /**
- * Emite tokens de acesso ES256. Deve existir apenas no ms-autenticacao, único serviço
+ * Emite tokens de acesso ES256. Deve existir apenas no ms-pessoa, único serviço
  * que recebe a chave privada (e nos testes, com o par de chaves de teste).
  */
 public class JwtEmissor {

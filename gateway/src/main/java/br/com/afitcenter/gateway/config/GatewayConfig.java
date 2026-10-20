@@ -39,11 +39,12 @@ public class GatewayConfig {
                               @Value("${afitcenter.docs.habilitado:false}") boolean docsHabilitado) {
         var rotas = builder.routes()
 
-                // Login e conta: o ms-autenticacao decide o que é público (login) e o que exige JWT (conta).
-                .route("ms-auth", r -> r
-                        .path("/ms-auth/**")
+                // Login, cadastro do paciente e conta: o ms-pessoa decide o que é público (login e cadastro) e o que
+                // exige JWT (conta).
+                .route("ms-pessoa", r -> r
+                        .path("/ms-pessoa/**")
                         .filters(f -> f.stripPrefix(1).filter(jwtAuthFilter.opcional()))
-                        .uri("lb://ms-autenticacao"))
+                        .uri("lb://ms-pessoa"))
 
                 // Cadastro do nutricionista (público).
                 .route("ms-nutricionista-cadastro", r -> r

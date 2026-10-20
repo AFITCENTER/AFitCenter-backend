@@ -9,8 +9,8 @@ backend/
 ├── afitcenter-parent/    # POM pai: versões (Boot, Cloud, SpringDoc, JWT) e configuração de build
 ├── afitcenter-core/      # Bibliotecas compartilhadas; não gera container
 │   ├── core-base         #   papéis, headers internos, Problem Details, auditoria, CPF
-│   ├── core-auth         #   JWT ES256: emissão (só ms-autenticacao) e verificação
-│   ├── core-web          #   auto-config: filtro de autenticação, tenant, segurança, erros, Feign
+│   ├── core-auth         #   JWT ES256: emissão (só ms-pessoa) e verificação
+│   ├── core-web          #   auto-config: filtro de autenticação, tenant, segurança, erros, Feign, limite de tentativas
 │   ├── core-mensageria   #   contratos dos eventos, filas com DLQ, outbox transacional
 │   ├── core-paciente     #   réplica local do paciente para os serviços consumidores
 │   ├── core-assinatura   #   réplica da assinatura e aplicação dos limites do plano
@@ -18,7 +18,7 @@ backend/
 │   └── core-teste        #   chaves/tokens de teste e @TesteIntegracao (PostgreSQL embutido)
 ├── service-registry/     # Eureka Server (basic auth)
 ├── gateway/              # API Gateway
-├── ms-autenticacao/
+├── ms-pessoa/
 ├── ms-nutricionista/
 ├── ms-paciente/
 ├── ms-consulta/
@@ -43,9 +43,9 @@ backend/
 | --- | --- | --- | --- |
 | `service-registry` | — | Eureka: registro e descoberta | pronto |
 | `gateway` | — | Roteamento, JWT, bloqueio de `/internal/**`, CORS | pronto |
-| `ms-autenticacao` | `/ms-auth` | Credenciais, login, emissão do JWT, troca de senha | pronto |
-| `ms-nutricionista` | `/ms-nutricionista` | Cadastro público (req. 7), perfil, consultórios | pronto |
-| `ms-paciente` | `/ms-paciente` | Pacientes, contatos, condições, medicamentos (req. 1) | pronto |
+| `ms-pessoa` | `/ms-pessoa` | Quem acessa o sistema (nutricionistas, pacientes e administradores): dados pessoais, senha, papéis, termos, login e emissão do JWT; cadastro público do paciente; recuperação de senha e confirmação do e-mail | pronto |
+| `ms-nutricionista` | `/ms-nutricionista` | Cadastro público (req. 7), perfil profissional, consultórios | pronto |
+| `ms-paciente` | `/ms-paciente` | Pacientes, contatos, condições, medicamentos (req. 1); código de acesso e portal do paciente | pronto |
 | `ms-consulta` | `/ms-consulta` | Agenda e consultas (req. 4), análises (req. 2) | pronto |
 | `ms-avaliacao` | `/ms-avaliacao` | Avaliação corporal, metas, exames, evolução (req. 3 e 6) | esquema, catálogos e réplica; CRUD a implementar |
 | `ms-dieta` | `/ms-dieta` | Alimentos e dietas (req. 5) | esquema, catálogos, réplica e busca de alimentos; CRUD a implementar |
@@ -76,11 +76,11 @@ O script cria um `.env.local` com segredos aleatórios e um par de chaves ES256 
 | http://localhost:15672 | Painel do RabbitMQ (`RABBITMQ_USER`/`RABBITMQ_PASSWORD`) |
 | http://localhost:8080/ms-paciente/swagger-ui.html | Swagger de cada serviço (só no perfil `local`) |
 
-No perfil `local` existem dois nutricionistas fictícios (tenants diferentes, para testar o isolamento) com pacientes, consultório e consultas de exemplo, e um administrador (papel `ADMIN`: planos, cobranças e auditoria de todos). A primeira nutricionista assina o plano Profissional; o segundo está no Gratuito. As credenciais estão no comentário de `ms-autenticacao/src/main/resources/db/migration/local/R__dados_ficticios.sql`.
+No perfil `local` existem dois nutricionistas fictícios (tenants diferentes, para testar o isolamento) com pacientes, consultório e consultas de exemplo, um paciente com acesso ao portal (ligado à ficha dele na primeira nutricionista) e um administrador (papel `ADMIN`: planos, cobranças e auditoria de todos). A primeira nutricionista assina o plano Profissional; o segundo está no Gratuito. As credenciais estão no comentário de `ms-pessoa/src/main/resources/db/migration/local/R__dados_ficticios.sql`.
 
 ```bash
-# login → token
-curl -s -X POST http://localhost:8080/ms-auth/v1/auth/login -H "Content-Type: application/json" \
+# login (nutricionista, paciente ou administrador) → token
+curl -s -X POST http://localhost:8080/ms-pessoa/v1/auth/login -H "Content-Type: application/json" \
      -d '{"email":"<email do seed>","senha":"<senha do seed>"}'
 
 # pacientes do nutricionista logado
@@ -95,6 +95,21 @@ curl -s -X POST http://localhost:8080/ms-planos/v1/assinatura/mudanca-plano -H "
 curl -s -X POST http://localhost:8080/ms-pagamentos/v1/simulador/cobrancas/<cobranca.id>/pagamento \
      -H "Authorization: Bearer <accessToken>"
 
+# portal do paciente: o paciente cria a conta, o nutricionista gera o código da ficha e o paciente liga a ficha
+curl -s -X POST http://localhost:8080/ms-pessoa/v1/cadastros/paciente -H "Content-Type: application/json" \
+     -d '{"nome":"Maria","email":"maria@exemplo.local","senha":"senha-da-maria","aceiteTermos":true,"versaoTermos":"1.0"}'
+curl -s -X POST http://localhost:8080/ms-paciente/v1/pacientes/<id da ficha>/acesso -H "Authorization: Bearer <token do nutricionista>"
+curl -s -X POST http://localhost:8080/ms-paciente/v1/portal/vinculos -H "Authorization: Bearer <token da Maria>" \
+     -H "Content-Type: application/json" -d '{"codigo":"<codigo>"}'
+curl -s http://localhost:8080/ms-paciente/v1/portal/fichas -H "Authorization: Bearer <token da Maria>"
+
+# esqueci a senha: no perfil local nenhum e-mail sai, o link (com o token) aparece no log do ms-pessoa
+curl -s -X POST http://localhost:8080/ms-pessoa/v1/senha/esqueci -H "Content-Type: application/json" \
+     -d '{"email":"maria@exemplo.local"}'
+docker compose --env-file .env.local -f compose.yml -f compose.homolog.yml logs ms-pessoa | grep -A6 "redefinição de senha"
+curl -s -X POST http://localhost:8080/ms-pessoa/v1/senha/redefinir -H "Content-Type: application/json" \
+     -d '{"token":"<token do link>","novaSenha":"outra-senha-da-maria"}'
+
 # quem acessou os dados de um paciente
 curl -s "http://localhost:8080/ms-auditoria/v1/auditoria/registros?pacienteId=<id>" -H "Authorization: Bearer <accessToken>"
 ```
@@ -107,8 +122,8 @@ Para rodar um serviço pela IDE usando a infraestrutura do Docker, acrescente `-
 
 | Perfil | Uso |
 | --- | --- |
-| `local` | Desenvolvimento: dados fictícios (`db/migration/local`), Swagger, mensagens de erro detalhadas, CORS para `localhost:5173` |
-| `homolog` | Swagger ligado, sem dados fictícios |
+| `local` | Desenvolvimento: dados fictícios (`db/migration/local`), Swagger, mensagens de erro detalhadas, CORS para `localhost:5173`, e-mails só no log do ms-pessoa (com o link) |
+| `homolog` | Swagger ligado, sem dados fictícios, e-mails só no log (sem o link) até `AFIT_EMAIL_PROVEDOR=SMTP` |
 | `prod` | Logs de segurança em WARN |
 | (vazio) | Configuração segura padrão |
 
@@ -125,7 +140,7 @@ Para compilar só um serviço (com o core): `mvn -pl ms-paciente -am verify`.
 
 ## Variáveis de ambiente
 
-Modelo comentado: [.env.example](.env.example). O arquivo passado em `--env-file` serve só para a interpolação do Compose: cada container recebe apenas as variáveis que usa. Só o `ms-autenticacao` recebe a chave privada do JWT, só o `ms-pagamentos` recebe a chave de API do provedor de pagamento e os segredos dos webhooks, o Gateway não recebe nenhum segredo e cada serviço só conhece a senha do próprio banco.
+Modelo comentado: [.env.example](.env.example). O arquivo passado em `--env-file` serve só para a interpolação do Compose: cada container recebe apenas as variáveis que usa. Só o `ms-pessoa` recebe a chave privada do JWT e as credenciais SMTP (`AFIT_SMTP_*`; sem elas, fora dos perfis `local` e `homolog`, ele não sobe), só o `ms-pagamentos` recebe a chave de API do provedor de pagamento e os segredos dos webhooks, o Gateway não recebe nenhum segredo e cada serviço só conhece a senha do próprio banco.
 
 > Nunca versione `.env.local`, `.env.homolog`, `.env.prod` ou qualquer arquivo com segredos.
 

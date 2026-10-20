@@ -1,6 +1,6 @@
 -- =====================================================================
 -- Dados FICTICIOS, carregados somente no perfil local.
--- Mesmos ids dos nutricionistas do ms-autenticacao/ms-nutricionista e da cobranca do ms-pagamentos.
+-- Mesmos ids dos nutricionistas do ms-pessoa/ms-nutricionista e da cobranca do ms-pagamentos.
 --   Ana   (a001): Profissional mensal, pago por Pix ha 10 dias (datas relativas a primeira subida)
 --   Bruno (a002): Gratuito
 -- =====================================================================

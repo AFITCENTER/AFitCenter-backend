@@ -21,6 +21,11 @@ public final class TokensTeste {
         return comPapeis(nutricionistaId, Papel.NUTRICIONISTA);
     }
 
+    /** {@code Bearer <jwt>} de uma pessoa com acesso ao portal do paciente. */
+    public static String paciente(UUID pessoaId) {
+        return comPapeis(pessoaId, Papel.PACIENTE);
+    }
+
     public static String comPapeis(UUID usuarioId, Papel... papeis) {
         return "Bearer " + EMISSOR.emitir(usuarioId, Set.of(papeis));
     }

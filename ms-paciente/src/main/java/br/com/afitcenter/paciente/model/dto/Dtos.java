@@ -107,6 +107,8 @@ public final class Dtos {
             StatusPaciente status,
             EnderecoDto endereco,
             List<ContatoDto> contatos,
+            boolean acessoAtivo,
+            Instant acessoDesde,
             Instant criadoEm,
             Instant atualizadoEm
     ) {
@@ -115,7 +117,8 @@ public final class Dtos {
             return new PacienteResponse(p.getId(), p.getNome(), p.getNomeSocial(), p.nomeExibicao(), p.getCpf(),
                     p.getDataNascimento(), p.idade(), p.getSexo(), p.getOcupacao(), p.getObjetivo(),
                     p.getNivelAtividade(), p.getObservacoes(), p.getStatus(), EnderecoDto.de(p.getEndereco()),
-                    p.getContatos().stream().map(ContatoDto::de).toList(), p.getCriadoEm(), p.getAtualizadoEm());
+                    p.getContatos().stream().map(ContatoDto::de).toList(), p.getPessoaId() != null,
+                    p.getPessoaVinculadaEm(), p.getCriadoEm(), p.getAtualizadoEm());
         }
     }
 
@@ -153,6 +156,36 @@ public final class Dtos {
         public static PacienteInternoResponse de(Paciente p) {
             return new PacienteInternoResponse(p.getId(), p.getNutricionistaId(), p.nomeExibicao(), p.getSexo().name(),
                     p.getDataNascimento(), p.getStatus().name(), p.isExcluido(), p.getVersao());
+        }
+    }
+
+    // ---------------------------------------------------------------- acesso do paciente ao portal
+
+    /**
+     * Código para o nutricionista entregar ao paciente. Aparece só nesta resposta: o banco guarda o hash, então um
+     * código perdido não é recuperado, e gerar outro invalida o anterior.
+     */
+    public record CodigoAcessoResponse(String codigo, Instant expiraEm) {
+    }
+
+    public record VinculoRequest(@NotBlank @Size(max = 20) String codigo) {
+    }
+
+    /**
+     * Ficha vista pelo próprio paciente no portal. Só identificação: anotações e dados clínicos do nutricionista
+     * (observações, condições, medicamentos) não aparecem aqui.
+     */
+    public record FichaPortalResponse(
+            UUID id,
+            UUID nutricionistaId,
+            String nomeExibicao,
+            StatusPaciente status,
+            Instant vinculadaEm
+    ) {
+
+        public static FichaPortalResponse de(Paciente p) {
+            return new FichaPortalResponse(p.getId(), p.getNutricionistaId(), p.nomeExibicao(), p.getStatus(),
+                    p.getPessoaVinculadaEm());
         }
     }
 

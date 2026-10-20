@@ -7,9 +7,9 @@ import br.com.afitcenter.core.mensageria.evento.TipoAlteracao;
 import br.com.afitcenter.core.teste.DadosTeste;
 import br.com.afitcenter.core.teste.TesteIntegracao;
 import br.com.afitcenter.core.teste.TokensTeste;
-import br.com.afitcenter.nutricionista.client.AutenticacaoClient;
-import br.com.afitcenter.nutricionista.model.dto.Dtos.CriarUsuarioRequest;
-import br.com.afitcenter.nutricionista.model.dto.Dtos.UsuarioCriadoResponse;
+import br.com.afitcenter.nutricionista.client.PessoaClient;
+import br.com.afitcenter.nutricionista.model.dto.Dtos.PessoaRegistradaResponse;
+import br.com.afitcenter.nutricionista.model.dto.Dtos.RegistrarPessoaRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import feign.FeignException;
@@ -30,6 +30,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,68 +55,89 @@ class NutricionistaIntegracaoTest {
     AssinaturaEventosListener assinaturaListener;
 
     @MockitoBean
-    AutenticacaoClient autenticacaoClient;
+    PessoaClient pessoaClient;
     @MockitoBean
     AssinaturaInternoClient assinaturaClient;
 
     @Test
-    void cadastroCriaCredencialEPerfilComOMesmoId() throws Exception {
-        UUID usuarioId = UUID.randomUUID();
-        when(autenticacaoClient.criar(any())).thenReturn(new UsuarioCriadoResponse(usuarioId));
+    void cadastroRegistraAPessoaEGravaOPerfilComOMesmoId() throws Exception {
+        UUID pessoaId = UUID.randomUUID();
+        when(pessoaClient.registrar(any())).thenReturn(new PessoaRegistradaResponse(pessoaId, true));
 
         String crn = "4" + System.nanoTime() % 100000;
+        String cpf = DadosTeste.cpf();
         String email = DadosTeste.email("Ana");
-        cadastrar(cadastro(DadosTeste.cpf(), crn, email))
+        cadastrar(cadastro(formatado(cpf), crn, email))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.nutricionistaId").value(usuarioId.toString()));
+                .andExpect(jsonPath("$.nutricionistaId").value(pessoaId.toString()));
 
-        ArgumentCaptor<CriarUsuarioRequest> enviado = ArgumentCaptor.forClass(CriarUsuarioRequest.class);
-        verify(autenticacaoClient).criar(enviado.capture());
-        assertThat(enviado.getValue().perfil()).isEqualTo("NUTRICIONISTA");
-        assertThat(enviado.getValue().email()).isEqualTo(email.toLowerCase());
+        ArgumentCaptor<RegistrarPessoaRequest> enviado = ArgumentCaptor.forClass(RegistrarPessoaRequest.class);
+        verify(pessoaClient).registrar(enviado.capture());
+        assertThat(enviado.getValue().papel()).isEqualTo("NUTRICIONISTA");
+        assertThat(enviado.getValue().nome()).isEqualTo("Nutri Teste");
+        assertThat(enviado.getValue().cpf()).isEqualTo(cpf);
+        assertThat(enviado.getValue().email()).isEqualTo(email);
         assertThat(enviado.getValue().aceites()).hasSize(2);
 
-        mvc.perform(get("/v1/nutricionistas/me").header("Authorization", TokensTeste.nutricionista(usuarioId)))
+        mvc.perform(get("/v1/nutricionistas/me").header("Authorization", TokensTeste.nutricionista(pessoaId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.crn").value("CRN-3 " + crn))
-                .andExpect(jsonPath("$.email").value(email.toLowerCase()));
+                .andExpect(jsonPath("$.nome").doesNotExist())
+                .andExpect(jsonPath("$.email").doesNotExist());
+
+        mvc.perform(put("/v1/nutricionistas/me").header("Authorization", TokensTeste.nutricionista(pessoaId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"especialidades\":\"Esportiva\",\"endereco\":{\"cidade\":\"Santos\",\"uf\":\"SP\"}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.especialidades").value("Esportiva"))
+                .andExpect(jsonPath("$.endereco.cidade").value("Santos"));
     }
 
     @Test
-    void cpfDuplicadoRespondeConflitoSemCriarCredencial() throws Exception {
-        String cpf = DadosTeste.cpf();
-        when(autenticacaoClient.criar(any())).thenReturn(new UsuarioCriadoResponse(UUID.randomUUID()));
-        cadastrar(cadastro(cpf, "51" + System.nanoTime() % 100000, DadosTeste.email("a"))).andExpect(status().isCreated());
+    void crnDuplicadoRespondeConflitoSemChamarOMsPessoa() throws Exception {
+        String crn = "51" + System.nanoTime() % 100000;
+        when(pessoaClient.registrar(any())).thenReturn(new PessoaRegistradaResponse(UUID.randomUUID(), true));
+        cadastrar(cadastro(DadosTeste.cpf(), crn, DadosTeste.email("a"))).andExpect(status().isCreated());
 
-        org.mockito.Mockito.clearInvocations(autenticacaoClient);
-        cadastrar(cadastro(cpf, "52" + System.nanoTime() % 100000, DadosTeste.email("b")))
+        org.mockito.Mockito.clearInvocations(pessoaClient);
+        cadastrar(cadastro(DadosTeste.cpf(), crn, DadosTeste.email("b")))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("Já existe um nutricionista cadastrado com este CPF."));
-        verify(autenticacaoClient, never()).criar(any());
+                .andExpect(jsonPath("$.detail").value("Já existe um nutricionista cadastrado com este CRN."));
+        verify(pessoaClient, never()).registrar(any());
     }
 
     @Test
-    void emailJaUsadoNoMsAutenticacaoViraConflito() throws Exception {
-        when(autenticacaoClient.criar(any())).thenThrow(new FeignException.Conflict("conflito",
-                Request.create(Request.HttpMethod.POST, "/internal/usuarios", Map.of(), null, StandardCharsets.UTF_8, null),
-                null, Map.of()));
-
+    void recusaDoMsPessoaChegaComOMotivo() throws Exception {
+        doThrow(new FeignException.Conflict("conflito", requisicao(),
+                problema(409, "Já existe uma conta com este CPF."), Map.of())).when(pessoaClient).registrar(any());
         cadastrar(cadastro(DadosTeste.cpf(), "61" + System.nanoTime() % 100000, DadosTeste.email("c")))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("Já existe uma conta com este e-mail."));
+                .andExpect(jsonPath("$.detail").value("Já existe uma conta com este CPF."));
+
+        doThrow(new FeignException.Conflict("conflito", requisicao(), null, Map.of())).when(pessoaClient).registrar(any());
+        cadastrar(cadastro(DadosTeste.cpf(), "62" + System.nanoTime() % 100000, DadosTeste.email("c")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Já existe uma conta com este e-mail ou CPF."));
+
+        doThrow(new FeignException.TooManyRequests("bloqueado", requisicao(),
+                problema(429, "Muitas tentativas com senha incorreta. Tente novamente em alguns minutos."), Map.of()))
+                .when(pessoaClient).registrar(any());
+        cadastrar(cadastro(DadosTeste.cpf(), "63" + System.nanoTime() % 100000, DadosTeste.email("c")))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.detail").value("Muitas tentativas com senha incorreta. Tente novamente em alguns minutos."));
     }
 
     @Test
-    void falhaAoGravarOPerfilRemoveACredencialCriada() throws Exception {
-        // Mesmo id de um perfil já existente: o INSERT viola a chave primária depois da credencial criada.
+    void falhaAoGravarOPerfilTiraOPapelNoMsPessoa() throws Exception {
+        // Mesmo id de um perfil já existente: o INSERT viola a chave primária depois da pessoa registrada.
         UUID existente = UUID.randomUUID();
-        when(autenticacaoClient.criar(any())).thenReturn(new UsuarioCriadoResponse(existente));
+        when(pessoaClient.registrar(any())).thenReturn(new PessoaRegistradaResponse(existente, true));
         cadastrar(cadastro(DadosTeste.cpf(), "71" + System.nanoTime() % 100000, DadosTeste.email("d")))
                 .andExpect(status().isCreated());
 
         cadastrar(cadastro(DadosTeste.cpf(), "72" + System.nanoTime() % 100000, DadosTeste.email("e")))
                 .andExpect(status().isConflict());
-        verify(autenticacaoClient).remover(existente);
+        verify(pessoaClient).removerPapel(existente, "NUTRICIONISTA");
     }
 
     @Test
@@ -205,26 +227,6 @@ class NutricionistaIntegracaoTest {
     }
 
     @Test
-    void pagadorDaAssinaturaPelaRotaInterna() throws Exception {
-        UUID id = UUID.randomUUID();
-        when(autenticacaoClient.criar(any())).thenReturn(new UsuarioCriadoResponse(id));
-        String cpf = DadosTeste.cpf();
-        String email = DadosTeste.email("pagadora");
-        cadastrar(cadastro(cpf, String.valueOf(System.nanoTime() % 10_000_000), email)).andExpect(status().isCreated());
-
-        mvc.perform(get("/internal/nutricionistas/" + id).header("X-Internal-Token", "token-interno-teste"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nome").value("Nutri Teste"))
-                .andExpect(jsonPath("$.cpf").value(cpf))
-                .andExpect(jsonPath("$.email").value(email))
-                .andExpect(jsonPath("$.crnNumero").doesNotExist());
-        mvc.perform(get("/internal/nutricionistas/" + id).header("Authorization", TokensTeste.nutricionista(id)))
-                .andExpect(status().isForbidden());
-        mvc.perform(get("/internal/nutricionistas/" + UUID.randomUUID()).header("X-Internal-Token", "token-interno-teste"))
-                .andExpect(status().isNotFound());
-    }
-
-    @Test
     void rotasDoNutricionistaExigemPapelNutricionista() throws Exception {
         mvc.perform(get("/v1/nutricionistas/me")).andExpect(status().isUnauthorized());
         mvc.perform(get("/v1/nutricionistas/me").header("Authorization",
@@ -234,10 +236,22 @@ class NutricionistaIntegracaoTest {
 
     private UUID criarNutricionista() throws Exception {
         UUID id = UUID.randomUUID();
-        when(autenticacaoClient.criar(any())).thenReturn(new UsuarioCriadoResponse(id));
+        when(pessoaClient.registrar(any())).thenReturn(new PessoaRegistradaResponse(id, true));
         cadastrar(cadastro(DadosTeste.cpf(), String.valueOf(System.nanoTime() % 10_000_000), DadosTeste.email("n")))
                 .andExpect(status().isCreated());
         return id;
+    }
+
+    private static String formatado(String cpf) {
+        return cpf.substring(0, 3) + "." + cpf.substring(3, 6) + "." + cpf.substring(6, 9) + "-" + cpf.substring(9);
+    }
+
+    private static Request requisicao() {
+        return Request.create(Request.HttpMethod.POST, "/internal/pessoas", Map.of(), null, StandardCharsets.UTF_8, null);
+    }
+
+    private static byte[] problema(int status, String detalhe) {
+        return ("{\"status\":" + status + ",\"detail\":\"" + detalhe + "\"}").getBytes(StandardCharsets.UTF_8);
     }
 
     private ObjectNode cadastro(String cpf, String crn, String email) {

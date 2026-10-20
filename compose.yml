@@ -110,9 +110,9 @@ services:
       POSTGRES_USER: ${POSTGRES_ADMIN_USER:-afit_admin}
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?defina POSTGRES_ADMIN_PASSWORD}
       POSTGRES_DB: postgres
-      AUTH_DB_NAME: ${AUTH_DB_NAME:-afit_auth}
-      AUTH_DB_USER: ${AUTH_DB_USER:-afit_auth}
-      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?defina AUTH_DB_PASSWORD}
+      PESSOA_DB_NAME: ${PESSOA_DB_NAME:-afit_pessoa}
+      PESSOA_DB_USER: ${PESSOA_DB_USER:-afit_pessoa}
+      PESSOA_DB_PASSWORD: ${PESSOA_DB_PASSWORD:?defina PESSOA_DB_PASSWORD}
       NUTRICIONISTA_DB_NAME: ${NUTRICIONISTA_DB_NAME:-afit_nutricionista}
       NUTRICIONISTA_DB_USER: ${NUTRICIONISTA_DB_USER:-afit_nutricionista}
       NUTRICIONISTA_DB_PASSWORD: ${NUTRICIONISTA_DB_PASSWORD:?defina NUTRICIONISTA_DB_PASSWORD}
@@ -152,21 +152,32 @@ services:
   # ---------------------------------------------------------------------------
   # Microsserviços
   # ---------------------------------------------------------------------------
-  ms-autenticacao:
+  ms-pessoa:
     <<: *java-service
-    image: ${IMAGE_REGISTRY:-afitcenter}/ms-autenticacao:${IMAGE_TAG:-local}
-    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-autenticacao } }
+    image: ${IMAGE_REGISTRY:-afitcenter}/ms-pessoa:${IMAGE_TAG:-local}
+    build: { context: ., dockerfile: Dockerfile.service, args: { SERVICE_NAME: ms-pessoa } }
     environment:
-      # RabbitMQ só para a trilha de auditoria (logins).
+      # RabbitMQ só para a trilha de auditoria (logins, cadastros e alterações de conta).
       <<: [*spring-env, *jwt-verificacao, *internal-token, *rabbit-env]
-      # Único container com a chave PRIVADA: só o ms-autenticacao emite tokens.
+      # Único container com a chave PRIVADA: só o ms-pessoa emite tokens.
       AFIT_JWT_PRIVATE_KEY: ${AFIT_JWT_PRIVATE_KEY:?defina AFIT_JWT_PRIVATE_KEY}
       AFIT_TOKEN_VALIDADE_MINUTOS: ${AFIT_TOKEN_VALIDADE_MINUTOS:-15}
       AFIT_LOGIN_MAX_FALHAS: ${AFIT_LOGIN_MAX_FALHAS:-5}
       AFIT_LOGIN_BLOQUEIO_MINUTOS: ${AFIT_LOGIN_BLOQUEIO_MINUTOS:-15}
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${AUTH_DB_NAME:-afit_auth}
-      SPRING_DATASOURCE_USERNAME: ${AUTH_DB_USER:-afit_auth}
-      SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD}
+      # E-mail (recuperação de senha e confirmação do e-mail). Único container com as credenciais SMTP.
+      # Sem valor: só é repassada se estiver definida (padrão do perfil: LOG em local/homolog, SMTP nos demais).
+      AFIT_EMAIL_PROVEDOR:
+      AFIT_EMAIL_REMETENTE: ${AFIT_EMAIL_REMETENTE:-}
+      AFIT_FRONTEND_URL: ${AFIT_FRONTEND_URL:-http://localhost:5173}
+      AFIT_SMTP_HOST: ${AFIT_SMTP_HOST:-}
+      AFIT_SMTP_PORT: ${AFIT_SMTP_PORT:-587}
+      AFIT_SMTP_USUARIO: ${AFIT_SMTP_USUARIO:-}
+      AFIT_SMTP_SENHA: ${AFIT_SMTP_SENHA:-}
+      AFIT_SMTP_STARTTLS: ${AFIT_SMTP_STARTTLS:-true}
+      AFIT_SENHA_LINK_VALIDADE_MINUTOS: ${AFIT_SENHA_LINK_VALIDADE_MINUTOS:-30}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${PESSOA_DB_NAME:-afit_pessoa}
+      SPRING_DATASOURCE_USERNAME: ${PESSOA_DB_USER:-afit_pessoa}
+      SPRING_DATASOURCE_PASSWORD: ${PESSOA_DB_PASSWORD}
     depends_on: *depende-infra
 
   ms-nutricionista:
@@ -189,6 +200,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${PACIENTE_DB_NAME:-afit_paciente}
       SPRING_DATASOURCE_USERNAME: ${PACIENTE_DB_USER:-afit_paciente}
       SPRING_DATASOURCE_PASSWORD: ${PACIENTE_DB_PASSWORD}
+      PORTAL_CODIGO_VALIDADE_HORAS: ${PORTAL_CODIGO_VALIDADE_HORAS:-72}
     depends_on: *depende-infra
 
   ms-consulta:

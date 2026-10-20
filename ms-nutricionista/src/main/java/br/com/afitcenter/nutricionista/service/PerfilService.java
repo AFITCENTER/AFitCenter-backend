@@ -2,7 +2,6 @@ package br.com.afitcenter.nutricionista.service;
 
 import br.com.afitcenter.core.web.erro.RecursoNaoEncontradoException;
 import br.com.afitcenter.nutricionista.model.dto.Dtos.AtualizarPerfilRequest;
-import br.com.afitcenter.nutricionista.model.dto.Dtos.NutricionistaInternoResponse;
 import br.com.afitcenter.nutricionista.model.dto.Dtos.NutricionistaResponse;
 import br.com.afitcenter.nutricionista.model.entity.Nutricionista;
 import br.com.afitcenter.nutricionista.repository.NutricionistaRepository;
@@ -12,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+/** Perfil profissional. Nome, CPF, e-mail e telefone ficam no ms-pessoa. */
 @Service
 @RequiredArgsConstructor
 public class PerfilService {
@@ -23,17 +23,11 @@ public class PerfilService {
         return NutricionistaResponse.de(entidade(nutricionistaId));
     }
 
-    @Transactional(readOnly = true)
-    public NutricionistaInternoResponse buscarInterno(UUID nutricionistaId) {
-        return NutricionistaInternoResponse.de(entidade(nutricionistaId));
-    }
-
-    /** CPF, CRN e e-mail não mudam por aqui (o e-mail é o login, gerido pelo ms-autenticacao). */
+    /** O CRN não muda por aqui. */
     @Transactional
     public NutricionistaResponse atualizar(UUID nutricionistaId, AtualizarPerfilRequest dados) {
         Nutricionista nutricionista = entidade(nutricionistaId);
-        nutricionista.atualizarPerfil(dados.nome().trim(), dados.telefone(), dados.especialidades(),
-                dados.assinaturaUrl(), dados.logoUrl(),
+        nutricionista.atualizarPerfil(dados.especialidades(), dados.assinaturaUrl(), dados.logoUrl(),
                 dados.endereco() == null ? null : dados.endereco().paraEntidade());
         return NutricionistaResponse.de(nutricionista);
     }

@@ -25,6 +25,11 @@ public final class Dtos {
 
     // ---------------------------------------------------------------- cadastro público
 
+    /**
+     * Nome, CPF, e-mail, senha e telefone vão para o ms-pessoa (dono dos dados pessoais e do acesso); CRN fica aqui.
+     * Quem já tem conta (como paciente, por exemplo) informa o mesmo e-mail e senha, e a conta ganha o papel de
+     * nutricionista.
+     */
     public record CadastroRequest(
             @NotBlank @Size(max = 150) String nome,
             @NotBlank @CpfValido String cpf,
@@ -65,9 +70,8 @@ public final class Dtos {
         }
     }
 
+    /** Nome e telefone mudam no ms-pessoa ({@code PUT /v1/conta}); CPF, CRN e e-mail não mudam. */
     public record AtualizarPerfilRequest(
-            @NotBlank @Size(max = 150) String nome,
-            @Size(max = 20) String telefone,
             @Size(max = 500) String especialidades,
             @Size(max = 500) String assinaturaUrl,
             @Size(max = 500) String logoUrl,
@@ -75,15 +79,12 @@ public final class Dtos {
     ) {
     }
 
+    /** Dados profissionais. Os pessoais (nome, CPF, e-mail, telefone) estão em {@code GET /ms-pessoa/v1/conta}. */
     public record NutricionistaResponse(
             UUID id,
-            String nome,
-            String cpf,
             Integer crnRegiao,
             String crnNumero,
             String crn,
-            String email,
-            String telefone,
             String especialidades,
             String assinaturaUrl,
             String logoUrl,
@@ -91,20 +92,8 @@ public final class Dtos {
     ) {
 
         public static NutricionistaResponse de(Nutricionista n) {
-            return new NutricionistaResponse(n.getId(), n.getNome(), n.getCpf(), n.getCrnRegiao(), n.getCrnNumero(),
-                    n.crnFormatado(), n.getEmail(), n.getTelefone(), n.getEspecialidades(), n.getAssinaturaUrl(),
-                    n.getLogoUrl(), EnderecoDto.de(n.getEndereco()));
-        }
-    }
-
-    /**
-     * Formato de {@code GET /internal/nutricionistas/{id}}: só o que o ms-planos precisa para cobrar a assinatura
-     * (o provedor de pagamento exige nome e CPF do pagador).
-     */
-    public record NutricionistaInternoResponse(UUID id, String nome, String cpf, String email) {
-
-        public static NutricionistaInternoResponse de(Nutricionista n) {
-            return new NutricionistaInternoResponse(n.getId(), n.getNome(), n.getCpf(), n.getEmail());
+            return new NutricionistaResponse(n.getId(), n.getCrnRegiao(), n.getCrnNumero(), n.crnFormatado(),
+                    n.getEspecialidades(), n.getAssinaturaUrl(), n.getLogoUrl(), EnderecoDto.de(n.getEndereco()));
         }
     }
 
@@ -134,14 +123,16 @@ public final class Dtos {
         }
     }
 
-    // ---------------------------------------------------------------- contrato com o ms-autenticacao
+    // ---------------------------------------------------------------- contrato com o ms-pessoa
 
-    public record CriarUsuarioRequest(String email, String senha, String perfil, List<AceiteRequest> aceites, String ip) {
+    public record RegistrarPessoaRequest(String nome, String cpf, String email, String senha, String telefone,
+                                         String papel, List<AceiteRequest> aceites, String ip) {
     }
 
     public record AceiteRequest(String tipo, String versao) {
     }
 
-    public record UsuarioCriadoResponse(UUID id) {
+    /** {@code criada = false}: o e-mail já tinha conta e ela ganhou o papel de nutricionista. */
+    public record PessoaRegistradaResponse(UUID id, boolean criada) {
     }
 }
