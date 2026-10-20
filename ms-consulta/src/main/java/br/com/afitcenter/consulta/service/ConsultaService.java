@@ -33,6 +33,8 @@ import java.util.UUID;
  * Agenda e consultas. Paciente e consultório são validados pelas réplicas locais; as FKs compostas
  * {@code (paciente_id, nutricionista_id)} e {@code (consultorio_id, nutricionista_id)} garantem no
  * banco que nada de outro nutricionista entra numa consulta.
+ *
+ * <p>A verificação de conflito de horário roda com a agenda do nutricionista bloqueada até o fim da transação.</p>
  */
 @Service
 @RequiredArgsConstructor
@@ -137,7 +139,9 @@ public class ConsultaService {
                 dados.modalidade(), dados.valor(), dados.observacao());
     }
 
+    /** Com a agenda bloqueada: duas marcações simultâneas no mesmo horário não passam juntas pela verificação. */
     private void verificarConflito(UUID nutricionistaId, UUID ignorarId, OffsetDateTime inicio, int duracaoMin) {
+        repository.bloquearAgenda(nutricionistaId);
         if (repository.existeConflito(nutricionistaId, ignorarId, inicio, inicio.plusMinutes(duracaoMin)))
             throw new ConflitoException("Já existe uma consulta nesse horário.");
     }

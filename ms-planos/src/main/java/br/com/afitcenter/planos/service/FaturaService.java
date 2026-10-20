@@ -1,5 +1,6 @@
 package br.com.afitcenter.planos.service;
 
+import br.com.afitcenter.core.web.erro.ConflitoException;
 import br.com.afitcenter.core.web.erro.RecursoNaoEncontradoException;
 import br.com.afitcenter.core.web.erro.RegraNegocioException;
 import br.com.afitcenter.core.web.paginacao.PaginaResponse;
@@ -23,6 +24,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -40,6 +42,8 @@ public class FaturaService {
     public static final ZoneId FUSO = ZoneId.of("America/Sao_Paulo");
 
     private static final int TAMANHO_MAXIMO_PAGINA = 100;
+    private static final String FATURA_MUDOU =
+            "A fatura mudou enquanto a cobrança era gerada (outro pedido ao mesmo tempo). Consulte a fatura e tente de novo.";
 
     private final FaturaRepository repository;
     private final AssinaturaRepository assinaturaRepository;
@@ -86,6 +90,10 @@ public class FaturaService {
 
         Fatura preparada = transacao.execute(status -> {
             Fatura fatura = exigirAberta(bloquear(faturaId));
+            // Outro pedido gerou ou vinculou uma cobrança depois da leitura acima: ela não foi cancelada aqui.
+            if (fatura.getTentativasCobranca() != atual.getTentativasCobranca()
+                    || !Objects.equals(fatura.getCobrancaId(), atual.getCobrancaId()))
+                throw new ConflitoException(FATURA_MUDOU);
             LocalDate vencimento = fatura.getVencimento().isAfter(vencimentoPadrao())
                     ? fatura.getVencimento() : vencimentoPadrao();
             fatura.novaTentativa(formaPagamento, vencimento);
@@ -106,17 +114,27 @@ public class FaturaService {
         cancelarComCobranca(fatura);
     }
 
-    /** Cria a cobrança da tentativa atual e a vincula à fatura. */
+    /**
+     * Cria a cobrança da tentativa atual e a vincula à fatura. Se a fatura mudou enquanto a cobrança era criada
+     * (outra tentativa, cancelamento), a cobrança nova é cancelada: sem vínculo, ela poderia ser paga sem efeito.
+     */
     public CobrancaResponse emitirCobranca(Fatura fatura) {
         CobrancaResponse cobranca = cobrancas.emitir(fatura);
-        transacao.executeWithoutResult(status -> {
+        Boolean vinculada = transacao.execute(status -> {
             Fatura atual = bloquear(fatura.getId());
+            if (cobranca.id().equals(atual.getCobrancaId())) return true; // repetição do mesmo pedido
             if (atual.aberta() && atual.getTentativasCobranca() == fatura.getTentativasCobranca()
                     && atual.getCobrancaId() == null) {
                 atual.vincularCobranca(cobranca.id());
                 repository.saveAndFlush(atual);
+                return true;
             }
+            return false;
         });
+        if (!Boolean.TRUE.equals(vinculada)) {
+            cancelarCobrancaOrfa(cobranca.id(), fatura.getId());
+            throw new ConflitoException(FATURA_MUDOU);
+        }
         return cobranca;
     }
 
@@ -139,6 +157,15 @@ public class FaturaService {
         } catch (RuntimeException e) {
             log.warn("Não foi possível cancelar a fatura {} (cobrança {}); ela vencerá sem efeito.",
                     fatura.getId(), fatura.getCobrancaId(), e);
+        }
+    }
+
+    private void cancelarCobrancaOrfa(UUID cobrancaId, UUID faturaId) {
+        try {
+            cobrancas.cancelar(cobrancaId);
+        } catch (RuntimeException e) {
+            log.error("A cobrança {} ficou sem vínculo com a fatura {} e não foi cancelada. Cancele-a no ms-pagamentos.",
+                    cobrancaId, faturaId, e);
         }
     }
 

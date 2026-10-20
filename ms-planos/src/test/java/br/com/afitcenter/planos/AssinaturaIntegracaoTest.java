@@ -1,6 +1,8 @@
 package br.com.afitcenter.planos;
 
+import br.com.afitcenter.core.mensageria.evento.CobrancaEvento;
 import br.com.afitcenter.core.teste.ChavesTeste;
+import br.com.afitcenter.planos.model.dto.Dtos.CobrancaResponse;
 import br.com.afitcenter.planos.model.dto.Dtos.CriarCobrancaRequest;
 import br.com.afitcenter.planos.model.dto.Dtos.Pagador;
 import feign.FeignException;
@@ -14,10 +16,13 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -224,6 +229,62 @@ class AssinaturaIntegracaoTest extends IntegracaoBase {
                 .andExpect(jsonPath("$.cobrancaId").value(antiga.toString()));
         getComo(ana, "/v1/assinatura").andExpect(jsonPath("$.plano.codigo").value("PROFISSIONAL"));
         verify(cobrancaClient).cancelar(vigente);
+    }
+
+    @Test
+    void segundoPagamentoDaMesmaFaturaVaiParaATrilhaSemMudarAAssinatura() throws Exception {
+        UUID fatura = pedirMudanca(ana, "PROFISSIONAL", "MENSAL");
+        UUID pix = cobrancaDa(fatura);
+        postComo(ana, "/v1/assinatura/faturas/" + fatura + "/cobrancas", "{\"formaPagamento\":\"BOLETO\"}")
+                .andExpect(status().isCreated());
+        UUID boleto = cobrancaDa(fatura);
+        Instant pagoEm = Instant.parse("2026-10-18T13:00:00Z");
+        eventoCobranca(fatura, "PAGA", pagoEm);
+        long versao = ultimoEvento(ana).get("versao").asLong();
+
+        // O Pix substituído também foi pago, antes de o cancelamento chegar ao provedor.
+        pagamentos.receber(new CobrancaEvento(UUID.randomUUID(), Instant.now(), pix, ana, "ASSINATURA", fatura, "PAGA",
+                new BigDecimal("89.90"), pagoEm.plusSeconds(60), 3));
+        // Reentrega do pagamento do boleto: não é duplicidade.
+        eventoCobranca(fatura, "PAGA", pagoEm);
+
+        assertThat(periodoFim(ana)).isEqualTo(Instant.parse("2026-11-18T13:00:00Z"));
+        assertThat(ultimoEvento(ana).get("versao").asLong()).isEqualTo(versao);
+        assertThat(registrosDeAuditoria("PAGAMENTO_DUPLICADO", fatura)).singleElement().satisfies(detalhes -> {
+            assertThat(detalhes.get("cobrancaId").asText()).isEqualTo(pix.toString());
+            assertThat(detalhes.get("cobrancaDaFatura").asText()).isEqualTo(boleto.toString());
+        });
+    }
+
+    @Test
+    void novaCobrancaNaoPassaPorCimaDeOutraGeradaAoMesmoTempo() throws Exception {
+        UUID fatura = pedirMudanca(ana, "PROFISSIONAL", "MENSAL");
+        UUID atual = cobrancaDa(fatura);
+        // Enquanto este pedido cancela a cobrança atual, outro pedido abre uma nova tentativa da mesma fatura.
+        doAnswer(inv -> jdbc.update("UPDATE fatura SET tentativas_cobranca = tentativas_cobranca + 1, cobranca_id = NULL "
+                + "WHERE id = ?", fatura)).when(cobrancaClient).cancelar(atual);
+
+        postComo(ana, "/v1/assinatura/faturas/" + fatura + "/cobrancas", "{\"formaPagamento\":\"BOLETO\"}")
+                .andExpect(status().isConflict());
+        verify(cobrancaClient, times(1)).criar(any()); // só a da mudança de plano
+    }
+
+    @Test
+    void cobrancaCriadaDepoisQueAFaturaMudouECancelada() throws Exception {
+        UUID fatura = pedirMudanca(ana, "PROFISSIONAL", "MENSAL");
+        AtomicReference<UUID> orfa = new AtomicReference<>();
+        // Enquanto o ms-pagamentos cria a cobrança, outro pedido abre mais uma tentativa da mesma fatura.
+        doAnswer(inv -> {
+            jdbc.update("UPDATE fatura SET tentativas_cobranca = tentativas_cobranca + 1 WHERE id = ?", fatura);
+            CobrancaResponse criada = cobranca(inv.getArgument(0));
+            orfa.set(criada.id());
+            return criada;
+        }).when(cobrancaClient).criar(any());
+
+        postComo(ana, "/v1/assinatura/faturas/" + fatura + "/cobrancas", "{\"formaPagamento\":\"BOLETO\"}")
+                .andExpect(status().isConflict());
+        verify(cobrancaClient).cancelar(orfa.get());
+        assertThat(cobrancaDa(fatura)).isNull();
     }
 
     @Test

@@ -38,6 +38,8 @@ import java.util.UUID;
  *     já pago; inadimplente ou suspensa, vale na hora. A renovação em aberto é cancelada nos dois casos.</li>
  *     <li><b>Entre planos gratuitos:</b> imediata.</li>
  * </ul>
+ *
+ * <p>Só planos ativos do catálogo público (ou o padrão) podem ser escolhidos, como em {@code GET /v1/planos}.</p>
  */
 @Slf4j
 @Service
@@ -62,9 +64,12 @@ public class MudancaPlanoService {
     }
 
     public MudancaPlanoResponse mudar(UUID nutricionistaId, MudancaPlanoRequest dados) {
-        Plano destino = planoRepository.findByIdAndAtivoTrue(dados.planoId())
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Plano não encontrado."));
         Assinatura assinatura = assinaturaService.obterOuCriar(nutricionistaId);
+        // Plano fora do catálogo (cortesia, parceiro) não é contratado por aqui; quem já está nele pode mudar o ciclo.
+        Plano destino = planoRepository.findByIdAndAtivoTrue(dados.planoId())
+                .filter(plano -> plano.isPublico() || plano.isPadrao()
+                        || plano.getId().equals(assinatura.getPlano().getId()))
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Plano não encontrado."));
 
         if (destino.gratuito())
             return new MudancaPlanoResponse(paraGratuito(assinatura, destino), null, null);

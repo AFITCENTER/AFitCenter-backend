@@ -16,6 +16,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -135,6 +136,44 @@ class CicloAssinaturaTest extends IntegracaoBase {
         assertThat(cobrancaDa(renovacao)).isNotNull();
         assertThat(pedidosDa(renovacao)).singleElement()
                 .satisfies(p -> assertThat(p.chaveIdempotencia()).isEqualTo("fatura:" + renovacao + ":1"));
+    }
+
+    @Test
+    void renovacaoPagaDepoisDaMudancaDePlanoNaoVoltaAoPlanoAntigo() throws Exception {
+        assinarPago(ana, "PROFISSIONAL", PAGO_EM);
+        ciclo.emitirRenovacoes(FIM.minus(Duration.ofDays(3)));
+        UUID renovacao = renovacao(ana);
+        // O boleto da renovação já foi pago no provedor: o cancelamento é recusado e a fatura continua em aberto.
+        doThrow(conflito("/internal/cobrancas/cancelamento")).when(cobrancaClient).cancelar(cobrancaDa(renovacao));
+
+        UUID mudanca = pedirMudanca(ana, "CLINICA", "MENSAL");
+        eventoCobranca(mudanca, "PAGA", FIM.minus(Duration.ofDays(2)));
+        assertThat(statusFatura(renovacao)).isEqualTo("ABERTA");
+
+        eventoCobranca(renovacao, "PAGA", FIM.minus(Duration.ofDays(1)));
+
+        getComo(ana, "/v1/assinatura")
+                .andExpect(jsonPath("$.plano.codigo").value("CLINICA"))
+                .andExpect(jsonPath("$.periodoFim").value("2026-12-16T12:00:00Z"));
+        assertThat(ultimoEvento(ana).get("planoCodigo").asText()).isEqualTo("CLINICA");
+        assertThat(statusFatura(renovacao)).as("o pagamento fica registrado para o estorno").isEqualTo("PAGA");
+        assertThat(registrosDeAuditoria("PAGAMENTO_RENOVACAO_SUPERADA", renovacao)).hasSize(1);
+    }
+
+    @Test
+    void mudancaDePlanoPagaDepoisDaRenovacaoApontaARenovacaoNaoUtilizada() throws Exception {
+        assinarPago(ana, "PROFISSIONAL", PAGO_EM);
+        ciclo.emitirRenovacoes(FIM.minus(Duration.ofDays(3)));
+        UUID renovacao = renovacao(ana);
+        eventoCobranca(renovacao, "PAGA", FIM.minus(Duration.ofDays(2)));
+
+        UUID mudanca = pedirMudanca(ana, "CLINICA", "MENSAL");
+        eventoCobranca(mudanca, "PAGA", FIM.minus(Duration.ofDays(1)));
+
+        getComo(ana, "/v1/assinatura")
+                .andExpect(jsonPath("$.plano.codigo").value("CLINICA"))
+                .andExpect(jsonPath("$.periodoFim").value("2026-12-17T12:00:00Z"));
+        assertThat(registrosDeAuditoria("RENOVACAO_PAGA_NAO_UTILIZADA", renovacao)).hasSize(1);
     }
 
     /** O agendador processa todas as assinaturas do banco: filtra os pedidos desta fatura. */

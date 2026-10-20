@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -90,9 +93,35 @@ class CatalogoPlanosTest extends IntegracaoBase {
                 .andExpect(jsonPath("$.plano.codigo").value("GRATUITO"));
     }
 
+    @Test
+    void planoForaDoCatalogoNaoPodeSerContratado() throws Exception {
+        int pago = corpo(comoAdmin("POST", "/v1/admin/planos", plano(codigo, "29.90", null, 40, false))
+                .andExpect(status().isCreated())).get("id").asInt();
+        int cortesia = corpo(comoAdmin("POST", "/v1/admin/planos", plano(codigo + "_C", "0.00", null, null, false))
+                .andExpect(status().isCreated())).get("id").asInt();
+
+        postComo(ana, "/v1/assinatura/mudanca-plano", "{\"planoId\":%d,\"ciclo\":\"MENSAL\",\"formaPagamento\":\"PIX\"}"
+                .formatted(pago)).andExpect(status().isNotFound());
+        // Gratuito valeria na hora, sem pagamento.
+        postComo(ana, "/v1/assinatura/mudanca-plano", "{\"planoId\":%d}".formatted(cortesia))
+                .andExpect(status().isNotFound());
+        getComo(ana, "/v1/assinatura").andExpect(jsonPath("$.plano.codigo").value("GRATUITO"));
+        verify(cobrancaClient, never()).criar(any());
+
+        // Publicado no catálogo, passa a poder ser contratado.
+        comoAdmin("PUT", "/v1/admin/planos/" + pago, plano(codigo, "29.90", null, 40)).andExpect(status().isOk());
+        postComo(ana, "/v1/assinatura/mudanca-plano", "{\"planoId\":%d,\"ciclo\":\"MENSAL\",\"formaPagamento\":\"PIX\"}"
+                .formatted(pago)).andExpect(status().isOk());
+    }
+
     private String plano(String codigo, String mensal, String anual, int pacientes) {
+        return plano(codigo, mensal, anual, pacientes, true);
+    }
+
+    private String plano(String codigo, String mensal, String anual, Integer pacientes, boolean publico) {
         return """
-                {"codigo":"%s","nome":"Plano %s","precoMensal":%s,"precoAnual":%s,"limitePacientes":%d,
-                 "limiteConsultorios":2,"publico":true,"ordem":99}""".formatted(codigo, codigo, mensal, anual, pacientes);
+                {"codigo":"%s","nome":"Plano %s","precoMensal":%s,"precoAnual":%s,"limitePacientes":%s,
+                 "limiteConsultorios":2,"publico":%s,"ordem":99}""".formatted(codigo, codigo, mensal, anual, pacientes,
+                publico);
     }
 }

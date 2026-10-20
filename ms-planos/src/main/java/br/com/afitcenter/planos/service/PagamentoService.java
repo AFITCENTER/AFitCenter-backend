@@ -20,6 +20,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,7 +31,9 @@ import java.util.UUID;
  * <ul>
  *     <li><b>Paga:</b> mudança de plano começa um período novo a partir do pagamento; renovação estende o
  *     período (ou recomeça a partir do pagamento, se a assinatura estava suspensa). Se a cobrança paga não era a
- *     vigente da fatura (Pix antigo pago depois de gerar outro), a vigente é cancelada.</li>
+ *     vigente da fatura (Pix antigo pago depois de gerar outro), a vigente é cancelada. Pagamento que não se
+ *     aplica (fatura já paga por outra cobrança ou cancelada, renovação de um plano ou período que a assinatura já
+ *     deixou) não muda a assinatura e vai para o log e a trilha de auditoria, para o estorno manual.</li>
  *     <li><b>Vencida, recusada ou cancelada:</b> a mudança de plano é desfeita; a renovação continua em aberto
  *     para uma nova cobrança.</li>
  *     <li><b>Estornada:</b> o período pago por ela deixa de valer.</li>
@@ -93,29 +96,46 @@ public class PagamentoService {
     }
 
     private List<Runnable> paga(Fatura fatura, CobrancaEvento evento) {
-        if (fatura.getStatus() == StatusFatura.PAGA) return List.of();
+        if (fatura.getStatus() == StatusFatura.PAGA) {
+            // Reentrega do mesmo pagamento: nada a fazer. Outra cobrança da mesma fatura: o dinheiro entrou duas vezes.
+            if (!evento.cobrancaId().equals(fatura.getCobrancaId()))
+                pagamentoSemEfeito("PAGAMENTO_DUPLICADO", fatura, evento,
+                        "a fatura já foi paga pela cobrança " + fatura.getCobrancaId());
+            return List.of();
+        }
         if (!fatura.aberta()) {
             // Pago depois de cancelada (ex.: Pix pago no último instante): precisa de estorno manual.
-            log.error("Pagamento {} confirmado para a fatura {}, que está {}. Verifique e estorne manualmente.",
-                    evento.cobrancaId(), fatura.getId(), fatura.getStatus());
-            auditoria.registrarSistema("PAGAMENTO_FATURA_" + fatura.getStatus(), "faturas", fatura.getId(),
-                    fatura.getNutricionistaId(), Map.of("cobrancaId", evento.cobrancaId().toString()));
+            pagamentoSemEfeito("PAGAMENTO_FATURA_" + fatura.getStatus(), fatura, evento,
+                    "a fatura está " + fatura.getStatus());
             return List.of();
         }
 
         Assinatura assinatura = assinaturaRepository.bloquear(fatura.getAssinaturaId()).orElseThrow();
         Instant pagoEm = evento.pagoEm() != null ? evento.pagoEm() : clock.instant();
-        boolean recomeca = fatura.getTipo() == TipoFatura.MUDANCA_PLANO
-                || assinatura.getStatus() == StatusAssinatura.SUSPENSA;
-
-        Instant inicio = recomeca ? pagoEm : fatura.getPeriodoInicio();
-        Instant fim = fatura.getCiclo().somar(inicio);
         List<Runnable> depois = new ArrayList<>();
         UUID vigente = fatura.getCobrancaId();
         if (vigente != null && !vigente.equals(evento.cobrancaId())) {
             // Pagou uma cobrança anterior da mesma fatura: a vigente não pode ser paga de novo.
             depois.add(() -> cancelarCobrancaSemFalhar(vigente));
         }
+
+        if (fatura.getTipo() == TipoFatura.RENOVACAO && !renovaOPeriodoAtual(fatura, assinatura)) {
+            // A assinatura mudou depois da emissão (mudança de plano paga, volta ao gratuito): aplicar a renovação
+            // trocaria o plano atual pelo antigo. O pagamento fica registrado na fatura para o estorno.
+            fatura.pagar(pagoEm, fatura.getPeriodoInicio(), fatura.getPeriodoFim());
+            fatura.vincularCobranca(evento.cobrancaId());
+            faturaRepository.saveAndFlush(fatura);
+            pagamentoSemEfeito("PAGAMENTO_RENOVACAO_SUPERADA", fatura, evento,
+                    "a assinatura já não está no plano e no período que a renovação estendia");
+            return depois;
+        }
+
+        boolean recomeca = fatura.getTipo() == TipoFatura.MUDANCA_PLANO
+                || assinatura.getStatus() == StatusAssinatura.SUSPENSA;
+        Instant inicio = recomeca ? pagoEm : fatura.getPeriodoInicio();
+        Instant fim = fatura.getCiclo().somar(inicio);
+        if (fatura.getTipo() == TipoFatura.MUDANCA_PLANO)
+            renovacoesNaoUtilizadas(assinatura, pagoEm);
         fatura.pagar(pagoEm, inicio, fim);
         fatura.vincularCobranca(evento.cobrancaId());
         faturaRepository.saveAndFlush(fatura);
@@ -132,6 +152,39 @@ public class PagamentoService {
             faturaRepository.findAllByAssinaturaIdAndTipoAndStatus(assinatura.getId(), TipoFatura.RENOVACAO,
                     StatusFatura.ABERTA).forEach(r -> depois.add(() -> faturaService.cancelarSemFalhar(r)));
         return depois;
+    }
+
+    /** A renovação estende o período atual do mesmo plano, e não um que a assinatura já deixou para trás. */
+    private static boolean renovaOPeriodoAtual(Fatura renovacao, Assinatura assinatura) {
+        return renovacao.getPlano().getId().equals(assinatura.getPlano().getId())
+                && renovacao.getPeriodoInicio().equals(assinatura.getPeriodoFim());
+    }
+
+    /**
+     * Renovações já pagas cujo período ainda não começou: a mudança de plano começa agora (sem pró-rata) e elas não
+     * serão usadas. Vão para a trilha para o estorno.
+     */
+    private void renovacoesNaoUtilizadas(Assinatura assinatura, Instant pagoEm) {
+        faturaRepository.findAllByAssinaturaIdAndTipoAndStatus(assinatura.getId(), TipoFatura.RENOVACAO,
+                        StatusFatura.PAGA).stream()
+                .filter(renovacao -> renovacao.getPeriodoInicio().isAfter(pagoEm))
+                .forEach(renovacao -> {
+                    log.error("A renovação {} já paga não será usada: a mudança de plano começou antes do período dela. "
+                            + "Verifique e estorne manualmente.", renovacao.getId());
+                    auditoria.registrarSistema("RENOVACAO_PAGA_NAO_UTILIZADA", "faturas", renovacao.getId(),
+                            renovacao.getNutricionistaId(), Map.of("cobrancaId", String.valueOf(renovacao.getCobrancaId())));
+                });
+    }
+
+    /** Pagamento confirmado que não muda a assinatura: o valor precisa ser estornado manualmente. */
+    private void pagamentoSemEfeito(String acao, Fatura fatura, CobrancaEvento evento, String motivo) {
+        log.error("Pagamento {} confirmado para a fatura {}, mas {}. Verifique e estorne manualmente.",
+                evento.cobrancaId(), fatura.getId(), motivo);
+        Map<String, String> detalhes = new LinkedHashMap<>();
+        detalhes.put("cobrancaId", evento.cobrancaId().toString());
+        if (fatura.getCobrancaId() != null && !fatura.getCobrancaId().equals(evento.cobrancaId()))
+            detalhes.put("cobrancaDaFatura", fatura.getCobrancaId().toString());
+        auditoria.registrarSistema(acao, "faturas", fatura.getId(), fatura.getNutricionistaId(), detalhes);
     }
 
     private void cancelarCobrancaSemFalhar(UUID cobrancaId) {

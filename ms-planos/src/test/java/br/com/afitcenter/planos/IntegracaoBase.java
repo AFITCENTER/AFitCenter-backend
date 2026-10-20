@@ -13,6 +13,8 @@ import br.com.afitcenter.planos.service.CicloAssinaturaService;
 import br.com.afitcenter.planos.service.PagamentoService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import feign.FeignException;
+import feign.Request;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -23,7 +25,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -146,6 +152,26 @@ abstract class IntegracaoBase {
 
     protected String statusAssinatura(UUID nutricionista) {
         return jdbc.queryForObject("SELECT status FROM assinatura WHERE nutricionista_id = ?", String.class, nutricionista);
+    }
+
+    /** Detalhes dos registros de auditoria (na outbox) com a ação e o recurso informados. */
+    protected List<JsonNode> registrosDeAuditoria(String acao, UUID recursoId) throws Exception {
+        var detalhes = new ArrayList<JsonNode>();
+        for (String payload : jdbc.queryForList("""
+                SELECT payload::text FROM outbox_evento
+                WHERE routing_key = 'auditoria.registro' AND payload->>'acao' = ? AND payload->>'recursoId' = ?""",
+                String.class, acao, recursoId.toString()))
+            detalhes.add(json.readTree(payload).get("detalhes"));
+        return detalhes;
+    }
+
+    protected String statusFatura(UUID fatura) {
+        return jdbc.queryForObject("SELECT status FROM fatura WHERE id = ?", String.class, fatura);
+    }
+
+    protected static FeignException conflito(String url) {
+        return new FeignException.Conflict("conflito", Request.create(Request.HttpMethod.POST, url, Map.of(), null,
+                StandardCharsets.UTF_8, null), null, Map.of());
     }
 
     /** Último evento assinatura.* publicado (na outbox) para o nutricionista. */
